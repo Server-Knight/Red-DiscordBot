@@ -1,8 +1,12 @@
 try:
     # pylint: disable=import-error
-    import ujson
-except ModuleNotFoundError:
-    import json as ujson
+    import orjson as ujson
+except ImportError as e:
+    try:
+        # pylint: disable=import-error
+        import ujson
+    except ModuleNotFoundError:
+        import json as ujson
 
 from aioredis import Redis
 from aioredis.commands import Pipeline
@@ -85,7 +89,10 @@ class Client(Redis):
         ``nx`` if set to True, set ``value`` only if it does not exist
         ``xx`` if set to True, set ``value`` only if it exists
         """
-        pieces = [name, str_path(path), ujson.dumps(obj)]
+        obj = ujson.dumps(obj)
+        if hasattr(obj, "decode"):
+            obj = obj.decode("utf-8")
+        pieces = [name, str_path(path), obj]
 
         # Handle existential modifiers
         if nx and xx:
@@ -109,21 +116,30 @@ class Client(Redis):
         Increments the numeric (integer or floating point) JSON value under
         ``path`` at key ``name`` by the provided ``number``
         """
-        return await self.execute(b"JSON.NUMINCRBY", name, str_path(path), ujson.dumps(number))
+        obj = ujson.dumps(number)
+        if hasattr(obj, "decode"):
+            obj = obj.decode("utf-8")
+        return await self.execute(b"JSON.NUMINCRBY", name, str_path(path), obj)
 
     async def jsonnummultby(self, name, path, number):
         """
         Multiplies the numeric (integer or floating point) JSON value under
         ``path`` at key ``name`` with the provided ``number``
         """
-        return await self.execute(b"JSON.NUMMULTBY", name, str_path(path), ujson.dumps(number))
+        obj = ujson.dumps(number)
+        if hasattr(obj, "decode"):
+            obj = obj.decode("utf-8")
+        return await self.execute(b"JSON.NUMMULTBY", name, str_path(path), obj)
 
     async def jsonstrappend(self, name, string, path=Path.rootPath()):
         """
         Appends to the string JSON value under ``path`` at key ``name`` the
         provided ``string``
         """
-        return await self.execute(b"JSON.STRAPPEND", name, str_path(path), ujson.dumps(string))
+        obj = ujson.dumps(string)
+        if hasattr(obj, "decode"):
+            obj = obj.decode("utf-8")
+        return await self.execute(b"JSON.STRAPPEND", name, str_path(path), obj)
 
     async def jsonstrlen(self, name, path=Path.rootPath()):
         """
@@ -139,7 +155,10 @@ class Client(Redis):
         """
         pieces = [name, str_path(path)]
         for o in args:
-            pieces.append(ujson.dumps(o))
+            obj = ujson.dumps(o)
+            if hasattr(obj, "decode"):
+                obj = obj.decode("utf-8")
+            pieces.append(obj)
         return await self.execute(b"JSON.ARRAPPEND", *pieces)
 
     async def jsonarrindex(self, name, path, scalar, start=0, stop=-1):
@@ -148,9 +167,10 @@ class Client(Redis):
         ``name``. The search can be limited using the optional inclusive
         ``start`` and exclusive ``stop`` indices.
         """
-        return await self.execute(
-            b"JSON.ARRINDEX", name, str_path(path), ujson.dumps(scalar), start, stop
-        )
+        obj = ujson.dumps(scalar)
+        if hasattr(obj, "decode"):
+            obj = obj.decode("utf-8")
+        return await self.execute(b"JSON.ARRINDEX", name, str_path(path), obj, start, stop)
 
     async def jsonarrinsert(self, name, path, index, *args):
         """
@@ -159,7 +179,10 @@ class Client(Redis):
         """
         pieces = [name, str_path(path), index]
         for o in args:
-            pieces.append(ujson.dumps(o))
+            obj = ujson.dumps(o)
+            if hasattr(obj, "decode"):
+                obj = obj.decode("utf-8")
+            pieces.append(obj)
         return await self.execute(b"JSON.ARRINSERT", *pieces)
 
     async def jsonarrlen(self, name, path=Path.rootPath()):

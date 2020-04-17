@@ -13,21 +13,27 @@ try:
     # pylint: disable=import-error
     import aioredis
     import aioredis_lock
+
+    try:
+        # pylint: disable=import-error
+        import orjson as ujson
+    except ImportError:
+        try:
+            # pylint: disable=import-error
+            import ujson
+        except ModuleNotFoundError:
+            import json as ujson
     from .client_interface import Client
-except ModuleNotFoundError:
+except ImportError:
     aioredis = None
     Client = None
-
-try:
-    # pylint: disable=import-error
-    import ujson
-except ModuleNotFoundError:
     import json as ujson
 
 from ..base import BaseDriver, IdentifierData, ConfigCategory
 from ...errors import StoredTypeError
 
 __all__ = ["RedisDriver"]
+
 
 # noinspection PyProtectedMember
 class RedisDriver(BaseDriver):
@@ -195,7 +201,10 @@ class RedisDriver(BaseDriver):
             cog_name, full_identifiers = _full_identifiers[0], _full_identifiers[1:]
             identifier_string = "."
             identifier_string += ".".join(map(self._escape_key, full_identifiers))
-            value_copy = ujson.loads(ujson.dumps(value))
+            dump = ujson.dumps(value)
+            if hasattr(dump, "decode"):
+                dump = dump.decode("utf-8")
+            value_copy = ujson.loads(dump)
             if isinstance(value_copy, dict):
                 value_copy = self._escape_dict_keys(value_copy)
             await self._pre_flight(identifier_data)
