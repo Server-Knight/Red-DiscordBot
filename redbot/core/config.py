@@ -338,7 +338,7 @@ class Value:
                     self.identifier_data, value=value, default=self.default
                 )
             except StoredTypeError:
-                raise ValueError("The stored value is not a Integer or Float")
+                raise ValueError("The stored value is not a boolean")
 
     async def clear(self):
         """
