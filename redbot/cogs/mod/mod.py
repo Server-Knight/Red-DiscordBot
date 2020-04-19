@@ -46,7 +46,7 @@ class Mod(
 ):
     """Moderation tools."""
 
-    default_global_settings = {"version": "", "storenames": False}
+    default_global_settings = {"version": ""}
 
     default_guild_settings = {
         "mention_spam": {"ban": None, "kick": None, "warn": None, "strict": False},
@@ -79,7 +79,6 @@ class Mod(
         self.cache: dict = {}
         self.tban_expiry_task = self.bot.loop.create_task(self.check_tempban_expirations())
         self.last_case: dict = defaultdict(dict)
-        self._name_status_cache: bool = False
 
         self._ready = asyncio.Event()
 
@@ -113,7 +112,6 @@ class Mod(
 
     async def initialize(self):
         await self._maybe_update_config()
-        self._name_status_cache = await self.settings.storenames()
         self._ready.set()
 
     async def cog_before_invoke(self, ctx: commands.Context) -> None:
