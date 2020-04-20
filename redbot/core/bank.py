@@ -14,6 +14,7 @@ from . import Config, errors, commands
 from .i18n import Translator
 
 from .errors import BankPruneError
+from .utils import AsyncIter
 
 if TYPE_CHECKING:
     from .bot import Red
