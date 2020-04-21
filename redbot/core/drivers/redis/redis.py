@@ -11,21 +11,20 @@ from secrets import compare_digest
 try:
     # pylint: disable=import-error
     import aioredis
-
-    try:
-        # pylint: disable=import-error
-        import orjson as ujson
-    except ImportError:
-        try:
-            # pylint: disable=import-error
-            import ujson
-        except ModuleNotFoundError:
-            import json as ujson
     from .client_interface import Client
 except ImportError:
     aioredis = None
     Client = None
-    import json as ujson
+
+try:
+    # pylint: disable=import-error
+    import orjson as ujson
+except ImportError:
+    try:
+        # pylint: disable=import-error
+        import ujson
+    except ImportError:
+        import json as ujson
 
 from ..base import BaseDriver, IdentifierData, ConfigCategory
 from ...errors import StoredTypeError
