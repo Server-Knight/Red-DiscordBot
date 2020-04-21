@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import contextlib
 import getpass
 import re
 from typing import Optional, Callable, Any, Union, AsyncIterator, Tuple, Pattern
@@ -142,7 +141,7 @@ class RedisDriver(BaseDriver):
     #             await asyncio.sleep(2)
     #     with contextlib.suppress(aioredis.errors.ReplyError):
     #         await cls._pool.bgrewriteaof()
-    #
+
     # @classmethod
     # async def _backup_periodically(cls):
     #     with contextlib.suppress(asyncio.CancelledError):
