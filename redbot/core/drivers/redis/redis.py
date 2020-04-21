@@ -9,7 +9,6 @@ from redbot.core.drivers.log import log
 from secrets import compare_digest
 
 try:
-    # pylint: disable=import-error
     import aioredis
     from .client_interface import Client
 except ImportError:
