@@ -195,6 +195,7 @@ class RedBase(
         self._uptime = None
         self._checked_time_accuracy = None
         self._color = discord.Embed.Empty  # This is needed or color ends up 0x000000
+        self.wavelink = None
 
         self._main_dir = bot_dir
         self._cog_mgr = CogManager()
