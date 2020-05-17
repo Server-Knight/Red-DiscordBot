@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import getpass
+import logging
 import re
 from typing import Optional, Callable, Any, Union, AsyncIterator, Tuple, Pattern
 
@@ -30,6 +31,7 @@ from ...errors import StoredTypeError
 
 __all__ = ["RedisDriver"]
 
+__log__ = logging.getLogger("red.Redis")
 
 # noinspection PyProtectedMember
 class RedisDriver(BaseDriver):
@@ -307,18 +309,19 @@ class RedisDriver(BaseDriver):
                 yield cog, cog_id
 
     async def import_data(self, cog_data, custom_group_data):
+        __log__.info(f"Converting Cog: {self.cog_name}")
         for category, all_data in cog_data:
-            splitted_pkey = self._split_primary_key(category, custom_group_data, all_data)
-            for pkey, data in splitted_pkey:
-                ident_data = IdentifierData(
-                    self.cog_name,
-                    self.unique_cog_identifier,
-                    category,
-                    pkey,
-                    (),
-                    *ConfigCategory.get_pkey_info(category, custom_group_data),
-                )
-                await self.set(ident_data, data)
+            __log__.info(f"Converting cog category: {category}")
+            ident_data = IdentifierData(
+                self.cog_name,
+                self.unique_cog_identifier,
+                category,
+                (),
+                (),
+                *ConfigCategory.get_pkey_info(category, custom_group_data),
+            )
+            __log__.info(f"Data length: {len(all_data)}")
+            await self.set(ident_data, all_data)
 
     @staticmethod
     def _escape_key(key: str) -> str:
