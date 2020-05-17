@@ -208,8 +208,9 @@ class RedisDriver(BaseDriver):
                 await self._execute(
                     cog_name, path=identifier_string, obj=value_copy, method=self._pool_set.jsonset,
                 )
-        except Exception as exc:
-            log.exception(f"Error saving data for {self.cog_name}", exc_info=exc)
+        except Exception:
+            log.exception(f"Error saving data for {self.cog_name}")
+            raise
 
     async def clear(self, identifier_data: IdentifierData):
         _full_identifiers = identifier_data.to_tuple()
@@ -319,9 +320,26 @@ class RedisDriver(BaseDriver):
                 (),
                 *ConfigCategory.get_pkey_info(category, custom_group_data),
             )
-            await self.set(ident_data, all_data)
+            try:
+                await self.set(ident_data, all_data)
+            except Exception:
+                await self._individual_migrate(category, custom_group_data, all_data)
 
-
+    async def _individual_migrate(self, category, custom_group_data, all_data):
+        splitted_pkey = self._split_primary_key(category, custom_group_data, all_data)
+        for pkey, data in splitted_pkey:
+            ident_data = IdentifierData(
+                self.cog_name,
+                self.unique_cog_identifier,
+                category,
+                pkey,
+                (),
+                *ConfigCategory.get_pkey_info(category, custom_group_data),
+            )
+            try:
+                await self.set(ident_data, data)
+            except Exception as err:
+                log.critical(f"Error saving: {ident_data.__repr__()}: {data}", exc_info=err)
 
 
     @staticmethod
