@@ -31,7 +31,6 @@ from ...errors import StoredTypeError
 
 __all__ = ["RedisDriver"]
 
-__log__ = logging.getLogger("red.Redis")
 
 # noinspection PyProtectedMember
 class RedisDriver(BaseDriver):
@@ -210,7 +209,7 @@ class RedisDriver(BaseDriver):
                     cog_name, path=identifier_string, obj=value_copy, method=self._pool_set.jsonset,
                 )
         except Exception as exc:
-            log.exception(exc, exc_info=exc)
+            log.exception(f"Error saving data for {self.cog_name}", exc_info=exc)
 
     async def clear(self, identifier_data: IdentifierData):
         _full_identifiers = identifier_data.to_tuple()
@@ -309,9 +308,9 @@ class RedisDriver(BaseDriver):
                 yield cog, cog_id
 
     async def import_data(self, cog_data, custom_group_data):
-        __log__.info(f"Converting Cog: {self.cog_name}")
+        log.info(f"Converting Cog: {self.cog_name}")
         for category, all_data in cog_data:
-            __log__.info(f"Converting cog category: {category}")
+            log.info(f"Converting cog category: {category}")
             ident_data = IdentifierData(
                 self.cog_name,
                 self.unique_cog_identifier,
@@ -320,8 +319,10 @@ class RedisDriver(BaseDriver):
                 (),
                 *ConfigCategory.get_pkey_info(category, custom_group_data),
             )
-            __log__.info(f"Data length: {len(all_data)}")
             await self.set(ident_data, all_data)
+
+
+
 
     @staticmethod
     def _escape_key(key: str) -> str:
