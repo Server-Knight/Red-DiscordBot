@@ -229,24 +229,38 @@ class Pipeline(Pipeline, Client):
     """Pipeline for ReJSONClient"""
 
 
-async def create_redis_pool(address, *, db=None, password=None, ssl=None,
-                            encoding=None, commands_factory=Client,
-                            minsize=1, maxsize=10, parser=None,
-                            timeout=None, pool_cls=None,
-                            connection_cls=None, loop=None):
+async def create_redis_pool(
+    address,
+    *,
+    db=None,
+    password=None,
+    ssl=None,
+    encoding=None,
+    commands_factory=Client,
+    minsize=1,
+    maxsize=10,
+    parser=None,
+    timeout=None,
+    pool_cls=None,
+    connection_cls=None,
+    loop=None,
+):
     """Creates high-level Redis interface.
 
     This function is a coroutine.
     """
-    pool = await create_pool(address, db=db,
-                             password=password,
-                             ssl=ssl,
-                             encoding=encoding,
-                             minsize=minsize,
-                             maxsize=maxsize,
-                             parser=parser,
-                             create_connection_timeout=timeout,
-                             pool_cls=pool_cls,
-                             connection_cls=connection_cls,
-                             loop=loop)
+    pool = await create_pool(
+        address,
+        db=db,
+        password=password,
+        ssl=ssl,
+        encoding=encoding,
+        minsize=minsize,
+        maxsize=maxsize,
+        parser=parser,
+        create_connection_timeout=timeout,
+        pool_cls=pool_cls,
+        connection_cls=connection_cls,
+        loop=loop,
+    )
     return commands_factory(pool)

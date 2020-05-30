@@ -85,7 +85,6 @@ class RedisDriver(BaseDriver):
             cls._pool_pre_flight.close()
             await cls._pool_pre_flight.wait_closed()
 
-
     @staticmethod
     def get_config_details():
         host = (
@@ -149,7 +148,6 @@ class RedisDriver(BaseDriver):
             "database": database,
         }
 
-
     async def _pre_flight(self, identifier_data: IdentifierData):
         _full_identifiers = identifier_data.to_tuple()
         cog_name, full_identifiers = _full_identifiers[0], _full_identifiers[1:]
@@ -180,7 +178,9 @@ class RedisDriver(BaseDriver):
         if not await self._pool.exists(cog_name):
             raise KeyError
         try:
-            result = await self._execute(cog_name, *full_identifiers, method=self._pool_get.jsonget,)
+            result = await self._execute(
+                cog_name, *full_identifiers, method=self._pool_get.jsonget,
+            )
         except aioredis.errors.ReplyError:
             raise KeyError
         if isinstance(result, str):
@@ -206,7 +206,10 @@ class RedisDriver(BaseDriver):
             await self._pre_flight(identifier_data)
             async with self._lock:
                 await self._execute(
-                    cog_name, path=identifier_string, obj=value_copy, method=self._pool_set.jsonset,
+                    cog_name,
+                    path=identifier_string,
+                    obj=value_copy,
+                    method=self._pool_set.jsonset,
                 )
         except Exception:
             log.exception(f"Error saving data for {self.cog_name}")
@@ -245,7 +248,10 @@ class RedisDriver(BaseDriver):
                 and not await self._pool.jsonobjlen(name=cog_name, path=identifier_string)
             ):
                 await self._execute(
-                    cog_name, path=identifier_string, obj=default + 1, method=self._pool_set.jsonset,
+                    cog_name,
+                    path=identifier_string,
+                    obj=default + 1,
+                    method=self._pool_set.jsonset,
                 )
                 return default + 1
             elif _type == "object":
@@ -340,7 +346,6 @@ class RedisDriver(BaseDriver):
                 await self.set(ident_data, data)
             except Exception as err:
                 log.critical(f"Error saving: {ident_data.__repr__()}: {data}", exc_info=err)
-
 
     @staticmethod
     def _escape_key(key: str) -> str:

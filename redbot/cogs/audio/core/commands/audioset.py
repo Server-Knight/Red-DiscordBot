@@ -438,6 +438,7 @@ class AudioSetCommands(MixinMeta, metaclass=CompositeMetaClass):
         msg = _("Auto-play when queue ends: {true_or_false}.").format(
             true_or_false=_("Enabled") if not autoplay else _("Disabled")
         )
+
         await self.config.guild(ctx.guild).auto_play.set(not autoplay)
         if autoplay is not True and repeat is True:
             msg += _("\nRepeat has been disabled.")
