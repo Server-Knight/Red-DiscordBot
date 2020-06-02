@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import getpass
-import logging
 import re
 from typing import Optional, Callable, Any, Union, AsyncIterator, Tuple, Pattern
 
@@ -18,13 +17,9 @@ except ImportError:
 
 try:
     # pylint: disable=import-error
-    import orjson as ujson
+    import ujson
 except ImportError:
-    try:
-        # pylint: disable=import-error
-        import ujson
-    except ImportError:
-        import json as ujson
+    import json as ujson
 
 from ..base import BaseDriver, IdentifierData, ConfigCategory
 from ...errors import StoredTypeError
@@ -197,10 +192,7 @@ class RedisDriver(BaseDriver):
             cog_name, full_identifiers = _full_identifiers[0], _full_identifiers[1:]
             identifier_string = "."
             identifier_string += ".".join(map(self._escape_key, full_identifiers))
-            dump = ujson.dumps(value)
-            if hasattr(dump, "decode"):
-                dump = dump.decode("utf-8")
-            value_copy = ujson.loads(dump)
+            value_copy = ujson.loads(ujson.dumps(value))
             if isinstance(value_copy, dict):
                 value_copy = self._escape_dict_keys(value_copy)
             await self._pre_flight(identifier_data)
