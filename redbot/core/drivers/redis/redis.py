@@ -204,7 +204,7 @@ class RedisDriver(BaseDriver):
                     method=self._pool_set.jsonset,
                 )
         except Exception:
-            log.exception(f"Error saving data for {self.cog_name}")
+            log.error(f"Error saving data for {self.cog_name} - {full_identifiers}")
             raise
 
     async def clear(self, identifier_data: IdentifierData):
@@ -337,7 +337,8 @@ class RedisDriver(BaseDriver):
             try:
                 await self.set(ident_data, data)
             except Exception as err:
-                log.critical(f"Error saving: {ident_data.__repr__()}: {data}", exc_info=err)
+                log.critical(f"Error saving: {ident_data.__repr__()}", exc_info=err)
+                log.debug(f"Data: {data}")
 
     @staticmethod
     def _escape_key(key: str) -> str:
