@@ -25,6 +25,7 @@ from typing import (
 import aiohttp
 import discord
 import pkg_resources
+from discord.ext.commands import check
 from fuzzywuzzy import fuzz, process
 from redbot import VersionInfo
 
@@ -46,6 +47,7 @@ __all__ = (
     "send_to_owners_with_prefix_replaced",
     "expected_version",
     "fetch_latest_red_version_info",
+    "is_sudo_enabled",
 )
 
 
@@ -317,3 +319,12 @@ async def fetch_latest_red_version_info() -> Tuple[Optional[VersionInfo], Option
         required_python = data["info"]["requires_python"]
 
         return release, required_python
+
+
+def is_sudo_enabled():
+    """Deny the command if sudo mechanic is not enabled."""
+
+    async def predicate(ctx):
+        return ctx.bot._sudo_enabled
+
+    return check(predicate)

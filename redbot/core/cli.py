@@ -236,6 +236,9 @@ def parse_cli_flags(args):
     parser.add_argument(
         "--no-message-cache", action="store_true", help="Disable the internal message cache."
     )
+    parser.add_argument(
+        "--enable-sudo", action="store_true", help="Enable the sudo/unsudo permission mechanics."
+    )
 
     args = parser.parse_args(args)
 
