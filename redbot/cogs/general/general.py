@@ -1,5 +1,6 @@
 import datetime
 import time
+import urllib.parse
 from enum import Enum
 from random import randint, choice
 from typing import Final
@@ -469,7 +470,7 @@ class General(commands.Cog):
         """
 
         try:
-            url = "https://api.urbandictionary.com/v0/define?term=" + word
+            url = f"https://api.urbandictionary.com/v0/define?term={urllib.parse.quote(word)}"
             headers = {"content-type": "application/json"}
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers) as response:

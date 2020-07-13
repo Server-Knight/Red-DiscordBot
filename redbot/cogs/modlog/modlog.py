@@ -6,8 +6,9 @@ from redbot.core import checks, modlog, commands
 from redbot.core.bot import Red
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import box
-from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
+from redbot.core.utils.menus import SimpleHybridMenu
 
+from .menus import CasesForSource
 
 _ = Translator("ModLog", __file__)
 
@@ -139,9 +140,9 @@ class ModLog(commands.Cog):
 
         embed_requested = await ctx.embed_requested()
 
-        rendered_cases = [await case.message_content(embed=embed_requested) for case in cases]
-
-        await menu(ctx, rendered_cases, DEFAULT_CONTROLS)
+        await SimpleHybridMenu(
+            source=CasesForSource(cases), cog=self, delete_message_after=True,
+        ).start(ctx=ctx, wait=False)
 
     @commands.command()
     @commands.guild_only()
