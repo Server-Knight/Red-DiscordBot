@@ -138,8 +138,6 @@ class ModLog(commands.Cog):
         if not cases:
             return await ctx.send(_("That user does not have any cases."))
 
-        embed_requested = await ctx.embed_requested()
-
         await SimpleHybridMenu(
             source=CasesForSource(cases), cog=self, delete_message_after=True,
         ).start(ctx=ctx, wait=False)
