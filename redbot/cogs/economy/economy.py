@@ -1,7 +1,7 @@
 import calendar
 import logging
 import random
-from collections import defaultdict, deque, namedtuple
+from collections import defaultdict, deque
 from enum import Enum
 from typing import cast, Iterable, Union
 
@@ -12,16 +12,16 @@ from redbot.cogs.mod.converters import RawUserIds
 from redbot.core import Config, bank, commands, errors, checks
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import box, humanize_number
-from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
-
 from redbot.core.bot import Red
+from redbot.core.utils.menus import SimpleHybridMenu
+
+from .menus import LeaderboardSource
 
 T_ = Translator("Economy", __file__)
 
 logger = logging.getLogger("red.economy")
 
 NUM_ENC = "\N{COMBINING ENCLOSING KEYCAP}"
-MOCK_MEMBER = namedtuple("Member", "id guild")
 
 
 class SMReel(Enum):
@@ -463,8 +463,6 @@ class Economy(commands.Cog):
         Defaults to top 10.
         """
         guild = ctx.guild
-        author = ctx.author
-        max_bal = await bank.get_max_balance(ctx.guild)
         if top < 1:
             top = 10
         if await bank.is_global() and show_global:
@@ -473,60 +471,14 @@ class Economy(commands.Cog):
         else:
             bank_sorted = await bank.get_leaderboard(positions=top, guild=guild)
         try:
-            bal_len = len(humanize_number(bank_sorted[0][1]["balance"]))
-            bal_len_max = len(humanize_number(max_bal))
-            if bal_len > bal_len_max:
-                bal_len = bal_len_max
+            bank_sorted[0][1]["balance"]
             # first user is the largest we'll see
         except IndexError:
             return await ctx.send(_("There are no accounts in the bank."))
-        pound_len = len(str(len(bank_sorted)))
-        header = "{pound:{pound_len}}{score:{bal_len}}{name:2}\n".format(
-            pound="#",
-            name=_("Name"),
-            score=_("Score"),
-            bal_len=bal_len + 6,
-            pound_len=pound_len + 3,
-        )
-        highscores = []
-        pos = 1
-        temp_msg = header
-        for acc in bank_sorted:
-            try:
-                name = guild.get_member(acc[0]).display_name
-            except AttributeError:
-                user_id = ""
-                if await ctx.bot.is_owner(ctx.author):
-                    user_id = f"({str(acc[0])})"
-                name = f"{acc[1]['name']} {user_id}"
 
-            balance = acc[1]["balance"]
-            if balance > max_bal:
-                balance = max_bal
-                await bank.set_balance(MOCK_MEMBER(acc[0], guild), balance)
-            balance = humanize_number(balance)
-            if acc[0] != author.id:
-                temp_msg += (
-                    f"{f'{humanize_number(pos)}.': <{pound_len+2}} "
-                    f"{balance: <{bal_len + 5}} {name}\n"
-                )
-
-            else:
-                temp_msg += (
-                    f"{f'{humanize_number(pos)}.': <{pound_len+2}} "
-                    f"{balance: <{bal_len + 5}} "
-                    f"<<{author.display_name}>>\n"
-                )
-            if pos % 10 == 0:
-                highscores.append(box(temp_msg, lang="md"))
-                temp_msg = header
-            pos += 1
-
-        if temp_msg != header:
-            highscores.append(box(temp_msg, lang="md"))
-
-        if highscores:
-            await menu(ctx, highscores, DEFAULT_CONTROLS)
+        await SimpleHybridMenu(
+            source=LeaderboardSource(bank_sorted), cog=self, delete_message_after=True,
+        ).start(ctx=ctx, wait=False)
 
     @commands.command()
     @guild_only_check()
