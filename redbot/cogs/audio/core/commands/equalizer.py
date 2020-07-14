@@ -134,7 +134,7 @@ class EqualizerCommands(MixinMeta, metaclass=CompositeMetaClass):
                 text=_("{num} preset(s)").format(num=humanize_number(len(list(eq_presets.keys()))))
             )
             page_list.append(embed)
-        await menu(ctx, page_list, DEFAULT_CONTROLS)
+        await dpymenu(ctx, page_list, DEFAULT_CONTROLS)
 
     @command_equalizer.command(name="load")
     async def command_equalizer_load(self, ctx: commands.Context, eq_preset: str):
