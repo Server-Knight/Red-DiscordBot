@@ -10,7 +10,7 @@ import lavalink
 from redbot.core import commands
 from redbot.core.i18n import Translator
 from redbot.core.utils.chat_formatting import box, humanize_number, pagify
-from redbot.core.utils.menus import DEFAULT_CONTROLS, menu, start_adding_reactions
+from redbot.core.utils.menus import DEFAULT_CONTROLS, menu, start_adding_reactions, dpymenu
 from redbot.core.utils.predicates import MessagePredicate, ReactionPredicate
 
 from ...equalizer import Equalizer
