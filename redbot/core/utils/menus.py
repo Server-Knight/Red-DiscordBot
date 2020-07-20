@@ -16,6 +16,35 @@ _ReactableEmoji = Union[str, discord.Emoji]
 
 async def menu(
     ctx: commands.Context,
+    pages: Iterable[Union[str, discord.Embed]],
+    controls: Optional[Dict] = None,
+    message: discord.Message = None,
+    page: int = 0,
+    timeout: int = 180,
+    wait: bool = False,
+    delete_message_after: bool = True,
+    clear_reactions_after: bool = True,
+):
+    if controls == DEFAULT_CONTROLS:
+        return await dpymenu(
+            ctx=ctx,
+            pages=pages,
+            controls=None,
+            message=message,
+            page=page,
+            timeout=timeout,
+            wait=wait,
+            delete_message_after=delete_message_after,
+            clear_reactions_after=clear_reactions_after,
+        )
+    else:
+        return await _menu(
+            ctx=ctx, pages=pages, controls=controls, message=message, page=page, timeout=timeout
+        )
+
+
+async def _menu(
+    ctx: commands.Context,
     pages: Union[List[str], List[discord.Embed]],
     controls: dict,
     message: discord.Message = None,
