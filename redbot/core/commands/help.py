@@ -803,7 +803,7 @@ class RedHelpFormatter(HelpFormatterABC):
         else:
 
             await SimpleHybridMenu(
-                source=HelpSource(pages), delete_message_after=False, cog=None, timeout=60
+                source=HelpSource(pages), delete_message_after=True, cog=None, timeout=60
             ).start(ctx=ctx, wait=False)
 
 
