@@ -23,7 +23,7 @@ async def dpymenu(
     page: int = 0,
     timeout: int = 60,
     wait: bool = False,
-    delete_message_after: bool = False,
+    delete_message_after: bool = True,
     clear_reactions_after: bool = True,
 ):
     if controls is not None:
@@ -53,7 +53,7 @@ class HybridMenu(_dpy_menus.MenuPages, inherit_buttons=False):
         source: _dpy_menus.PageSource,
         cog: Optional[commands.Cog] = None,
         clear_reactions_after: bool = True,
-        delete_message_after: bool = False,
+        delete_message_after: bool = True,
         add_reactions: bool = True,
         using_custom_emoji: bool = False,
         using_embeds: bool = False,
@@ -133,6 +133,21 @@ class HybridMenu(_dpy_menus.MenuPages, inherit_buttons=False):
         except IndexError:
             # An error happened that can be handled, so ignore it.
             pass
+
+    async def finalize(self, timed_out):
+        """|coro|
+
+        A coroutine that is called when the menu loop has completed
+        its run. This is useful if some asynchronous clean-up is
+        required after the fact.
+
+        Parameters
+        --------------
+        timed_out: :class:`bool`
+            Whether the menu completed due to timing out.
+        """
+        if timed_out and self.delete_message_after:
+            self.delete_message_after = False
 
     def _skip_single_arrows(self):
         max_pages = self._source.get_max_pages()
@@ -414,7 +429,7 @@ class SimpleHybridMenu(HybridMenu, inherit_buttons=True):
         source: _dpy_menus.PageSource,
         cog: Optional[commands.Cog] = None,
         clear_reactions_after: bool = True,
-        delete_message_after: bool = False,
+        delete_message_after: bool = True,
         add_reactions: bool = True,
         timeout: int = 60,
         accept_keywords: bool = False,
