@@ -24,7 +24,6 @@ logger = logging.getLogger("red.economy")
 
 NUM_ENC = "\N{COMBINING ENCLOSING KEYCAP}"
 VARIATION_SELECTOR = "\N{VARIATION SELECTOR-16}"
-MOCK_MEMBER = namedtuple("Member", "id guild")
 
 
 class SMReel(Enum):
