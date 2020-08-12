@@ -23,6 +23,7 @@ T_ = Translator("Economy", __file__)
 logger = logging.getLogger("red.economy")
 
 NUM_ENC = "\N{COMBINING ENCLOSING KEYCAP}"
+VARIATION_SELECTOR = "\N{VARIATION SELECTOR-16}"
 
 
 class SMReel(Enum):
@@ -34,8 +35,8 @@ class SMReel(Enum):
     sunflower = "\N{SUNFLOWER}"
     six = "\N{DIGIT SIX}" + NUM_ENC
     mushroom = "\N{MUSHROOM}"
-    heart = "\N{HEAVY BLACK HEART}"
-    snowflake = "\N{SNOWFLAKE}"
+    heart = "\N{HEAVY BLACK HEART}" + VARIATION_SELECTOR
+    snowflake = "\N{SNOWFLAKE}" + VARIATION_SELECTOR
 
 
 _ = lambda s: s
