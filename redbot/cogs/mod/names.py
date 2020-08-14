@@ -171,10 +171,7 @@ class ModInfo(MixinMeta):
         is_special = user.id == 96130341705637888 and guild.id == 133049272517001216
 
         roles = user.roles[-1:0:-1]
-        if self.bot.store_names:
-            names, nicks = await self.get_names_and_nicks(user)
-        else:
-            names = nicks = None
+        names, nicks = await self.get_names_and_nicks(user)
 
         joined_at = user.joined_at if not is_special else special_date
         since_created = (ctx.message.created_at - user.created_at).days
@@ -288,10 +285,7 @@ class ModInfo(MixinMeta):
     @commands.command()
     async def names(self, ctx: commands.Context, *, user: discord.Member):
         """Show previous names and nicknames of a user."""
-        if self.bot.store_names:
-            names, nicks = await self.get_names_and_nicks(user)
-        else:
-            names = nicks = None
+        names, nicks = await self.get_names_and_nicks(user)
         msg = ""
         if names:
             msg += _("**Past 20 names**:")
