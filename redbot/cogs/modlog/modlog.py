@@ -1,8 +1,10 @@
+from datetime import datetime, timezone
+
 from typing import Optional, Union
 
 import discord
 
-from redbot.core import checks, modlog, commands
+from redbot.core import checks, commands, modlog
 from redbot.core.bot import Red
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import box
@@ -117,7 +119,13 @@ class ModLog(commands.Cog):
             if await ctx.embed_requested():
                 await ctx.send(embed=await case.message_content(embed=True))
             else:
-                await ctx.send(await case.message_content(embed=False))
+                message = _("{case}\n**Timestamp:** {timestamp}").format(
+                    case=await case.message_content(embed=False),
+                    timestamp=datetime.utcfromtimestamp(case.created_at).strftime(
+                        "%Y-%m-%d %H:%M:%S UTC"
+                    ),
+                )
+                await ctx.send(message)
 
     @commands.command()
     @commands.guild_only()
@@ -180,7 +188,7 @@ class ModLog(commands.Cog):
         to_modify = {"reason": reason}
         if case_obj.moderator != author:
             to_modify["amended_by"] = author
-        to_modify["modified_at"] = ctx.message.created_at.timestamp()
+        to_modify["modified_at"] = ctx.message.created_at.replace(tzinfo=timezone.utc).timestamp()
         await case_obj.edit(to_modify)
         await ctx.send(
             _("Reason for case #{num} has been updated.").format(num=case_obj.case_number)

@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import functools
 import logging
-import warnings
 from typing import Iterable, List, Optional, Union, Dict
 import discord
 
@@ -24,7 +23,7 @@ log = logging.getLogger("red.menus")
 async def menu(
     ctx: commands.Context,
     pages: Union[List[str], List[discord.Embed]],
-    controls: dict,
+    controls: Dict,
     message: discord.Message = None,
     page: int = 0,
     timeout: float = 60.0,
@@ -177,9 +176,7 @@ async def close_menu(
 
 
 def start_adding_reactions(
-    message: discord.Message,
-    emojis: Iterable[_ReactableEmoji],
-    loop: Optional[asyncio.AbstractEventLoop] = None,
+    message: discord.Message, emojis: Iterable[_ReactableEmoji],
 ) -> asyncio.Task:
     """Start adding reactions to a message.
 
@@ -191,18 +188,12 @@ def start_adding_reactions(
     reaction whilst the reactions are still being added - in fact,
     this is exactly what `menu` uses to do that.
 
-    This spawns a `asyncio.Task` object and schedules it on ``loop``.
-    If ``loop`` omitted, the loop will be retrieved with
-    `asyncio.get_event_loop`.
-
     Parameters
     ----------
     message: discord.Message
         The message to add reactions to.
     emojis : Iterable[Union[str, discord.Emoji]]
         The emojis to react to the message with.
-    loop : Optional[asyncio.AbstractEventLoop]
-        The event loop.
 
     Returns
     -------
@@ -217,17 +208,7 @@ def start_adding_reactions(
             for emoji in emojis:
                 await message.add_reaction(emoji)
 
-    if loop is None:
-        loop = asyncio.get_running_loop()
-    else:
-        warnings.warn(
-            "`loop` kwarg is deprecated since Red 3.3.1. It is currently being ignored"
-            " and will be removed in the first minor release after 2020-08-05.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-    return loop.create_task(task())
+    return asyncio.create_task(task())
 
 
 DEFAULT_CONTROLS = {
