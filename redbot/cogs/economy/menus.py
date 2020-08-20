@@ -96,12 +96,14 @@ class LeaderboardSource(menus.ListPageSource):
                 )
         if await menu.ctx.embed_requested():
             page = discord.Embed(
-                title="{}\nYou are currently #{}/{}".format(
+                title=_("{}\nYou are currently #{}/{}").format(
                     bank_name, self._author_position, len(self.entries)
                 ),
                 color=await menu.ctx.embed_color(),
-                description="{} ```py\nTotal bank amount {}\nYou have {}% of the total amount!```".format(
-                    box(header, lang="md"), humanize_number(self._total_balance), percent
+                description="{} ```py\n{}\n{}```".format(
+                    box(header, lang="md"),
+                    _("Total bank amount {}").format(humanize_number(self._total_balance)),
+                    _("You have {}% of the total amount!").format(percent),
                 ),
             )
             page.set_footer(text=f"Page {menu.current_page + 1}/{self.get_max_pages()}")
