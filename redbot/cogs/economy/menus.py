@@ -44,7 +44,7 @@ class LeaderboardSource(menus.ListPageSource):
             self._bank_name = await bank.get_bank_name(guild)
         bank_name = _("{} leaderboard.").format(self._bank_name)
         if self._total_balance is None:
-            if bank.is_global():
+            if await bank.is_global():
                 accounts = await bank._config.all_users()
             else:
                 accounts = await bank._config.all_members(guild=guild)
@@ -85,6 +85,7 @@ class LeaderboardSource(menus.ListPageSource):
             if acc[0] != author.id:
                 header += (
                     f"{f'{humanize_number(pos)}.': <{pound_len + 2}} "
+                    f"{balance: <{bal_len + 5}} "
                     f"{name}\n"
                 )
             else:
