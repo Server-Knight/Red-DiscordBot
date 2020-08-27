@@ -92,8 +92,8 @@ class RedBase(
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
         self._counter = ProxyCounter()
-        self._counter.register_counters_raw(
-            "Red",
+        self._counter._register_core_counters_raw(
+            "Red_Core",
             "on_connect",
             "on_ready",
             "on_command_completion",
@@ -109,6 +109,18 @@ class RedBase(
             "on_message_without_command",
             "on_modlog_case_edit",
             "on_modlog_case_create",
+            "on_trivia_end",
+            "on_raw_reaction_add",
+            "on_user_update",
+            "on_member_update",
+            "on_member_join",
+            "on_message_edit",
+            "on_message_dm",
+            "on_voice_state_update",
+            "on_red_audio_queue_end",
+            "on_red_audio_track_start",
+            "on_red_audio_track_end",
+            "on_filter_message_delete"
         )
         self._last_exception = None
         self._config.register_global(
@@ -1141,7 +1153,7 @@ class RedBase(
             ctx = None
 
         if ctx is None or ctx.valid is False:
-            self.counter.inc_raw("Red", "on_message_without_command")
+            self.counter._inc_core_raw("Red_Core", "on_message_without_command")
             self.dispatch("message_without_command", message)
 
     @staticmethod
