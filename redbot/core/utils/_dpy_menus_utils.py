@@ -439,9 +439,15 @@ class SimpleHybridMenu(HybridMenu, inherit_buttons=True):
             keyword_to_reaction_mapping = {
                 _("last"): ["\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f"],
                 _("first"): ["\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}\ufe0f"],
-                _("next"): ["\N{BLACK RIGHT-POINTING TRIANGLE}\ufe0f",],
-                _("previous"): ["\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f",],
-                _("prev"): ["\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f",],
+                _("next"): [
+                    "\N{BLACK RIGHT-POINTING TRIANGLE}\ufe0f",
+                ],
+                _("previous"): [
+                    "\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f",
+                ],
+                _("prev"): [
+                    "\N{BLACK LEFT-POINTING TRIANGLE}\ufe0f",
+                ],
                 _("close"): ["\N{CROSS MARK}"],
             }
         else:

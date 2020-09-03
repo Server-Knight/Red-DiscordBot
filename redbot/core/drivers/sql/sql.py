@@ -37,7 +37,11 @@ class SQLDriver(BaseDriver):
     _data_path: Optional[Path] = None
 
     def __init__(
-        self, cog_name: str, identifier: str, *, data_path_override: Optional[Path] = None,
+        self,
+        cog_name: str,
+        identifier: str,
+        *,
+        data_path_override: Optional[Path] = None,
     ):
         super().__init__(cog_name, identifier)
         self.file_name = f"{identifier}.db"

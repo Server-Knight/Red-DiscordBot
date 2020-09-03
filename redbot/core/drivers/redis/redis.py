@@ -47,16 +47,32 @@ class RedisDriver(BaseDriver):
         database = storage_details.get("database", 0)
         address = f"redis://{host}:{port}"
         cls._pool = await create_redis_pool(
-            address=address, db=database, password=password, encoding="utf-8", maxsize=50,
+            address=address,
+            db=database,
+            password=password,
+            encoding="utf-8",
+            maxsize=50,
         )
         cls._pool_set = await create_redis_pool(
-            address=address, db=database, password=password, encoding="utf-8", maxsize=50,
+            address=address,
+            db=database,
+            password=password,
+            encoding="utf-8",
+            maxsize=50,
         )
         cls._pool_get = await create_redis_pool(
-            address=address, db=database, password=password, encoding="utf-8", maxsize=50,
+            address=address,
+            db=database,
+            password=password,
+            encoding="utf-8",
+            maxsize=50,
         )
         cls._pool_pre_flight = await create_redis_pool(
-            address=address, db=database, password=password, encoding="utf-8", maxsize=50,
+            address=address,
+            db=database,
+            password=password,
+            encoding="utf-8",
+            maxsize=50,
         )
         cls._lock = asyncio.Lock()
 
@@ -220,7 +236,9 @@ class RedisDriver(BaseDriver):
         await self._pre_flight(identifier_data)
         async with self._lock:
             await self._execute(
-                cog_name, path=identifier_string, method=self._pool.jsondel,
+                cog_name,
+                path=identifier_string,
+                method=self._pool.jsondel,
             )
 
     async def inc(
@@ -280,7 +298,10 @@ class RedisDriver(BaseDriver):
                 and not await self._pool.jsonobjlen(name=cog_name, path=identifier_string)
             ):
                 await self._execute(
-                    cog_name, path=identifier_string, obj=not value, method=self._pool_set.jsonset,
+                    cog_name,
+                    path=identifier_string,
+                    obj=not value,
+                    method=self._pool_set.jsonset,
                 )
                 return not value
             elif _type == "object":
@@ -291,7 +312,10 @@ class RedisDriver(BaseDriver):
                 )
                 result = not json.loads(result)
                 await self._execute(
-                    cog_name, path=identifier_string, obj=result, method=self._pool_set.jsonset,
+                    cog_name,
+                    path=identifier_string,
+                    obj=result,
+                    method=self._pool_set.jsonset,
                 )
                 return result
 
