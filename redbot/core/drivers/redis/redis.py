@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import contextlib
 import getpass
 import re
 from typing import Optional, Callable, Any, Union, AsyncIterator, Tuple, Pattern
@@ -7,6 +8,8 @@ from typing import Optional, Callable, Any, Union, AsyncIterator, Tuple, Pattern
 from redbot.core import errors
 from redbot.core.drivers.log import log
 from secrets import compare_digest
+
+from ..cache import ConfigDriverCache
 
 try:
     import aioredis
@@ -27,6 +30,9 @@ from ...errors import StoredTypeError
 __all__ = ["RedisDriver"]
 
 
+_cache = ConfigDriverCache()
+
+
 # noinspection PyProtectedMember
 class RedisDriver(BaseDriver):
     _pool: Optional["Client"] = None
@@ -34,6 +40,13 @@ class RedisDriver(BaseDriver):
     _pool_get: Optional["Client"] = None
     _pool_pre_flight: Optional["Client"] = None
     _lock: Optional["asyncio.Lock"] = None
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        _cache.max_size += 1024
+
+    def __del__(self) -> None:
+        _cache.max_size -= 1024
 
     @classmethod
     async def initialize(cls, **storage_details) -> None:
@@ -185,23 +198,35 @@ class RedisDriver(BaseDriver):
         return output
 
     async def get(self, identifier_data: IdentifierData):
+        try:
+            ret = _cache[identifier_data]
+        except KeyError:
+            pass
+        else:
+            if ret is KeyError:
+                raise KeyError
+            return ret
         _full_identifiers = identifier_data.to_tuple()
         cog_name, full_identifiers = self._escape_key(_full_identifiers[0]), _full_identifiers[1:]
         full_identifiers = list(map(self._escape_key, full_identifiers))
         if not await self._pool.exists(cog_name):
+            _cache[identifier_data] = KeyError
             raise KeyError
         try:
             result = await self._execute(
                 cog_name, *full_identifiers, method=self._pool_get.jsonget, no_escape=True
             )
         except aioredis.errors.ReplyError:
+            _cache[identifier_data] = KeyError
             raise KeyError
         if isinstance(result, str):
             result = json.loads(result)
         if isinstance(result, dict):
             if result == {}:
+                _cache[identifier_data] = KeyError
                 raise KeyError
             result = self._unescape_dict_keys(result)
+        _cache[identifier_data] = result
         return result
 
     async def set(self, identifier_data: IdentifierData, value=None):
@@ -213,9 +238,11 @@ class RedisDriver(BaseDriver):
             )
             identifier_string = "."
             identifier_string += ".".join(map(self._escape_key, full_identifiers))
-            value_copy = json.loads(json.dumps(value))
-            if isinstance(value_copy, dict):
-                value_copy = self._escape_dict_keys(value_copy)
+            value_copy_base = json.loads(json.dumps(value))
+            if isinstance(value_copy_base, dict):
+                value_copy = self._escape_dict_keys(value_copy_base)
+            else:
+                value_copy = value_copy_base
             await self._pre_flight(identifier_data)
             async with self._lock:
                 await self._execute(
@@ -224,6 +251,7 @@ class RedisDriver(BaseDriver):
                     obj=value_copy,
                     method=self._pool_set.jsonset,
                 )
+            _cache[identifier_data] = value_copy_base
         except Exception:
             log.error(f"Error saving data for {self.cog_name} - {full_identifiers}")
             raise
@@ -240,6 +268,8 @@ class RedisDriver(BaseDriver):
                 path=identifier_string,
                 method=self._pool.jsondel,
             )
+            with contextlib.suppress(KeyError):
+                del _cache[identifier_data]
 
     async def inc(
         self,
@@ -268,7 +298,9 @@ class RedisDriver(BaseDriver):
                     obj=default + 1,
                     method=self._pool_set.jsonset,
                 )
-                return default + 1
+                result = default + 1
+                _cache[identifier_data] = result
+                return result
             elif _type == "object":
                 raise StoredTypeError("The value is not a Integer or Float")
             else:
@@ -278,7 +310,9 @@ class RedisDriver(BaseDriver):
                     number=value,
                     method=self._pool.jsonnumincrby,
                 )
-                return json.loads(applying)
+                result = json.loads(applying)
+                _cache[identifier_data] = result
+                return result
 
     async def toggle(
         self, identifier_data: IdentifierData, value: bool = None, default: Optional[bool] = None
@@ -303,7 +337,9 @@ class RedisDriver(BaseDriver):
                     obj=not value,
                     method=self._pool_set.jsonset,
                 )
-                return not value
+                result = not value
+                _cache[identifier_data] = result
+                return result
             elif _type == "object":
                 raise StoredTypeError("The value is not a Boolean or Null")
             else:
@@ -317,6 +353,7 @@ class RedisDriver(BaseDriver):
                     obj=result,
                     method=self._pool_set.jsonset,
                 )
+                _cache[identifier_data] = result
                 return result
 
     @classmethod
