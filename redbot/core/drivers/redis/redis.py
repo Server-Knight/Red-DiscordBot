@@ -1,16 +1,11 @@
-import asyncio
 import base64
-import contextlib
 import getpass
-import pickle
 import re
 from typing import Optional, Callable, Any, Union, AsyncIterator, Tuple, Pattern
 
 from redbot.core import errors
 from redbot.core.drivers.log import log
 from secrets import compare_digest
-
-from ..cache import ConfigDriverCache
 
 try:
     import aioredis
