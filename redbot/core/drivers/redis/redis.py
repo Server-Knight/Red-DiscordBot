@@ -19,12 +19,7 @@ except ImportError:
     aioredis = None
     Client = None
 
-try:
-    # pylint: disable=import-error
-    import ujson as json
-except ImportError:
-    import json
-
+from .. import json_module as json
 from ..base import BaseDriver, IdentifierData, ConfigCategory
 from ...errors import StoredTypeError
 
@@ -37,8 +32,6 @@ class RedisDriver(BaseDriver):
     _pool_set: Optional["Client"] = None
     _pool_get: Optional["Client"] = None
     _pool_pre_flight: Optional["Client"] = None
-    _lock: Optional["asyncio.Lock"] = None
-
 
     @classmethod
     async def initialize(cls, **storage_details) -> None:
@@ -83,7 +76,6 @@ class RedisDriver(BaseDriver):
             encoding="utf-8",
             maxsize=50,
         )
-        cls._lock = asyncio.Lock()
 
     @classmethod
     async def teardown(cls) -> None:
@@ -156,12 +148,12 @@ class RedisDriver(BaseDriver):
             else:
                 break
         sockets = (
-                input(
-                    f"Enter the path full to your UNIX socket file. "
-                    f"If left blank, Red will use a TCP connector (only set this if you also connect the Redis server to the same socket):\n"
-                    f"> "
-                )
-                or None
+            input(
+                f"Enter the path full to your UNIX socket file. "
+                f"If left blank, Red will use a TCP connector (only set this if you also connect the Redis server to the same socket):\n"
+                f"> "
+            )
+            or None
         )
 
         return {
@@ -169,7 +161,7 @@ class RedisDriver(BaseDriver):
             "port": port,
             "password": password,
             "database": database,
-            "unix_socket": sockets
+            "unix_socket": sockets,
         }
 
     async def _pre_flight(self, identifier_data: IdentifierData):
@@ -182,15 +174,14 @@ class RedisDriver(BaseDriver):
             string += ".".join([str_path(p) for p in full_identifiers_test])
             result = await self._pool_pre_flight.jsonset(cog_name, path=string, obj={}, nx=True)
         except aioredis.errors.ReplyError:
-            async with self._lock:
-                _cur_path = "."
+            _cur_path = "."
+            await self._pool_pre_flight.jsonset(cog_name, path=_cur_path, obj={}, nx=True)
+            for i in full_identifiers:
+                if _cur_path.endswith("."):
+                    _cur_path += self._escape_key(i)
+                else:
+                    _cur_path += f".{self._escape_key(i)}"
                 await self._pool_pre_flight.jsonset(cog_name, path=_cur_path, obj={}, nx=True)
-                for i in full_identifiers:
-                    if _cur_path.endswith("."):
-                        _cur_path += self._escape_key(i)
-                    else:
-                        _cur_path += f".{self._escape_key(i)}"
-                    await self._pool_pre_flight.jsonset(cog_name, path=_cur_path, obj={}, nx=True)
 
     @classmethod
     async def _execute(cls, query: str, *args, method: Optional[Callable] = None, **kwargs) -> Any:
@@ -237,13 +228,12 @@ class RedisDriver(BaseDriver):
             else:
                 value_copy = value_copy_base
             await self._pre_flight(identifier_data)
-            async with self._lock:
-                await self._execute(
-                    cog_name,
-                    path=identifier_string,
-                    obj=value_copy,
-                    method=self._pool_set.jsonset,
-                )
+            await self._execute(
+                cog_name,
+                path=identifier_string,
+                obj=value_copy,
+                method=self._pool_set.jsonset,
+            )
         except Exception:
             log.error(f"Error saving data for {self.cog_name} - {full_identifiers}")
             raise
@@ -254,12 +244,11 @@ class RedisDriver(BaseDriver):
         identifier_string = "."
         identifier_string += ".".join(map(self._escape_key, full_identifiers))
         await self._pre_flight(identifier_data)
-        async with self._lock:
-            await self._execute(
-                cog_name,
-                path=identifier_string,
-                method=self._pool.jsondel,
-            )
+        await self._execute(
+            cog_name,
+            path=identifier_string,
+            method=self._pool.jsondel,
+        )
 
     async def inc(
         self,
@@ -273,34 +262,33 @@ class RedisDriver(BaseDriver):
         identifier_string += ".".join(map(self._escape_key, full_identifiers))
         await self._pre_flight(identifier_data)
 
-        async with self._lock:
-            _type = await self._pool.jsontype(name=cog_name, path=identifier_string)
+        _type = await self._pool.jsontype(name=cog_name, path=identifier_string)
 
-            if _type not in [None, "integer", "number", "object"]:
-                raise StoredTypeError("The value is not a Integer or Float")
-            elif _type in [None, "null"] or (
-                _type == "object"
-                and not await self._pool.jsonobjlen(name=cog_name, path=identifier_string)
-            ):
-                await self._execute(
-                    cog_name,
-                    path=identifier_string,
-                    obj=default + 1,
-                    method=self._pool_set.jsonset,
-                )
-                result = default + 1
-                return result
-            elif _type == "object":
-                raise StoredTypeError("The value is not a Integer or Float")
-            else:
-                applying = await self._execute(
-                    cog_name,
-                    path=identifier_string,
-                    number=value,
-                    method=self._pool.jsonnumincrby,
-                )
-                result = json.loads(applying)
-                return result
+        if _type not in [None, "integer", "number", "object"]:
+            raise StoredTypeError("The value is not a Integer or Float")
+        elif _type in [None, "null"] or (
+            _type == "object"
+            and not await self._pool.jsonobjlen(name=cog_name, path=identifier_string)
+        ):
+            await self._execute(
+                cog_name,
+                path=identifier_string,
+                obj=default + 1,
+                method=self._pool_set.jsonset,
+            )
+            result = default + 1
+            return result
+        elif _type == "object":
+            raise StoredTypeError("The value is not a Integer or Float")
+        else:
+            applying = await self._execute(
+                cog_name,
+                path=identifier_string,
+                number=value,
+                method=self._pool.jsonnumincrby,
+            )
+            result = json.loads(applying)
+            return result
 
     async def toggle(
         self, identifier_data: IdentifierData, value: bool = None, default: Optional[bool] = None
@@ -311,36 +299,35 @@ class RedisDriver(BaseDriver):
         identifier_string += ".".join(map(self._escape_key, full_identifiers))
         await self._pre_flight(identifier_data)
         value = value if value is not None else default
-        async with self._lock:
-            _type = await self._pool.jsontype(name=cog_name, path=identifier_string)
-            if _type not in [None, "null", "boolean", "object"]:
-                raise StoredTypeError("The value is not a Boolean or Null")
-            elif _type in [None, "null"] or (
-                _type == "object"
-                and not await self._pool.jsonobjlen(name=cog_name, path=identifier_string)
-            ):
-                await self._execute(
-                    cog_name,
-                    path=identifier_string,
-                    obj=not value,
-                    method=self._pool_set.jsonset,
-                )
-                result = not value
-                return result
-            elif _type == "object":
-                raise StoredTypeError("The value is not a Boolean or Null")
-            else:
-                result = await self._execute(
-                    cog_name, path=identifier_string, method=self._pool_get.jsonget, no_escape=True
-                )
-                result = not json.loads(result)
-                await self._execute(
-                    cog_name,
-                    path=identifier_string,
-                    obj=result,
-                    method=self._pool_set.jsonset,
-                )
-                return result
+        _type = await self._pool.jsontype(name=cog_name, path=identifier_string)
+        if _type not in [None, "null", "boolean", "object"]:
+            raise StoredTypeError("The value is not a Boolean or Null")
+        elif _type in [None, "null"] or (
+            _type == "object"
+            and not await self._pool.jsonobjlen(name=cog_name, path=identifier_string)
+        ):
+            await self._execute(
+                cog_name,
+                path=identifier_string,
+                obj=not value,
+                method=self._pool_set.jsonset,
+            )
+            result = not value
+            return result
+        elif _type == "object":
+            raise StoredTypeError("The value is not a Boolean or Null")
+        else:
+            result = await self._execute(
+                cog_name, path=identifier_string, method=self._pool_get.jsonget, no_escape=True
+            )
+            result = not json.loads(result)
+            await self._execute(
+                cog_name,
+                path=identifier_string,
+                obj=result,
+                method=self._pool_set.jsonset,
+            )
+            return result
 
     @classmethod
     async def delete_all_data(cls, **kwargs) -> None:

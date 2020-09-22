@@ -1,22 +1,28 @@
-__all__ = ["SQLDriver"]
-
 import asyncio
-import json
-import logging
-import pickle
+import concurrent
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional, Dict, Any, AsyncIterator, Tuple, Union
+from typing import Optional, Dict, Any, AsyncIterator, Tuple
 
+from .queries import (
+    _create_table,
+    _get_query,
+    _set_query,
+    _clear_query,
+    _prep_query,
+    _get_type_query,
+)
 from .. import IdentifierData, ConfigCategory
+from ..log import log
+from ... import data_manager
 from ...drivers import BaseDriver
-from ... import data_manager, errors
 from ...utils.dbtools import APSWConnectionWrapper
 
+from .. import json_module as json
 
 _locks = defaultdict(asyncio.Lock)
 
-log = logging.getLogger("redbot.sql_driver")
+__all__ = ["SQLDriver"]
 
 
 # noinspection PyProtectedMember
@@ -33,8 +39,8 @@ class SQLDriver(BaseDriver):
         The path in which to store the file indicated by :py:attr:`file_name`.
     """
 
-    _conn: Optional["APSWConnectionWrapper"] = None
-    _data_path: Optional[Path] = None
+    db: Optional["APSWConnectionWrapper"] = None
+    data_path: Optional[Path] = None
 
     def __init__(
         self,
@@ -44,7 +50,7 @@ class SQLDriver(BaseDriver):
         data_path_override: Optional[Path] = None,
     ):
         super().__init__(cog_name, identifier)
-        self.file_name = f"{identifier}.db"
+        self.file_name = f"{identifier}.rdb"
         if data_path_override is not None:
             data_path = data_path_override
         elif cog_name == "Core" and identifier == "0":
@@ -52,20 +58,10 @@ class SQLDriver(BaseDriver):
         else:
             data_path = data_manager.cog_data_path(raw_name=cog_name)
         data_path.mkdir(parents=True, exist_ok=True)
-        self._data_path = data_path / self.file_name
-
-    @property
-    def data_path(self) -> Optional[Path]:
-        return self._data_path
-
-    @property
-    def db(self) -> Optional["APSWConnectionWrapper"]:
-        return self._conn
-
-    @db.deleter
-    def db(self) -> None:
-        if self.db:
-            self.db.close()
+        self.data_path = data_path / self.file_name
+        if not self.data_path.exists():
+            self.data_path.touch()
+        self.db = APSWConnectionWrapper(str(self.data_path))
 
     @property
     def _lock(self) -> asyncio.Lock:
@@ -74,15 +70,13 @@ class SQLDriver(BaseDriver):
     @classmethod
     async def initialize(cls, **storage_details) -> None:
         # No initializing to do
-        if cls._conn is None and cls.data_path is not None:
-            if not cls.data_path.exists():
-                cls.data_path.touch()
-            cls._conn = APSWConnectionWrapper(str(cls.data_path))
+        return
 
     @classmethod
     async def teardown(cls) -> None:
         # No tearing down to do
-        del cls.db
+        if cls.db is not None:
+            cls.db.close()
 
     @staticmethod
     def get_config_details() -> Dict[str, Any]:
@@ -90,85 +84,127 @@ class SQLDriver(BaseDriver):
         return {}
 
     async def get(self, identifier_data: IdentifierData):
-        try:
-            result = await self._execute(
-                "SELECT red_config.get($1)",
-                encode_identifier_data(identifier_data),
-                method=self._pool.fetchval,
-            )
-        except asyncpg.UndefinedTableError:
-            raise KeyError from None
-
-        if result is None:
-            # The result is None both when postgres yields no results, or when it yields a NULL row
-            # A 'null' JSON value would be returned as encoded JSON, i.e. the string 'null'
-            raise KeyError
-        return json.loads(result)
+        _full_identifiers = identifier_data.to_tuple()
+        cog_name, uuid, category, full_identifiers = (
+            _full_identifiers[0],
+            _full_identifiers[1],
+            _full_identifiers[2],
+            _full_identifiers[3:],
+        )
+        identifier_string = "$"
+        if full_identifiers:
+            identifier_string += "." + ".".join(full_identifiers)
+        query = _get_query.format(table_name=category)
+        type_query = _get_type_query.format(table_name=category)
+        result = await self._execute(query, category, type_query, path=identifier_string)
+        return result
 
     async def set(self, identifier_data: IdentifierData, value=None):
         try:
-            await self._execute(
-                "SELECT red_config.set($1, $2::jsonb)",
-                encode_identifier_data(identifier_data),
-                json.dumps(value),
+            _full_identifiers = identifier_data.to_tuple()
+            cog_name, uuid, category, full_identifiers = (
+                _full_identifiers[0],
+                _full_identifiers[1],
+                _full_identifiers[2],
+                _full_identifiers[3:],
             )
-        except asyncpg.ErrorInAssignmentError:
-            raise errors.CannotSetSubfield
+            identifier_string = "$"
+            if full_identifiers:
+                identifier_string += "." + ".".join(full_identifiers)
+            value = json.dumps(value)
+
+            query = _set_query.format(table_name=category)
+            async with self._lock:
+                await self._execute(query, category, path=identifier_string, data=value)
+        except Exception as exc:
+            log.error(
+                f"{exc} when saving data for '{self.cog_name}' "
+                f"id:{self.unique_cog_identifier} "
+                f"|| {value}"
+            )
+            raise
 
     async def clear(self, identifier_data: IdentifierData):
-        try:
-            await self._execute(
-                "SELECT red_config.clear($1)", encode_identifier_data(identifier_data)
-            )
-        except asyncpg.UndefinedTableError:
-            pass
+        _full_identifiers = identifier_data.to_tuple()
+        cog_name, uuid, category, full_identifiers = (
+            _full_identifiers[0:1],
+            _full_identifiers[1:2],
+            _full_identifiers[2:3],
+            _full_identifiers[3:],
+        )
+        if cog_name:
+            (cog_name,) = cog_name
+        if uuid:
+            (uuid,) = uuid
+        if category:
+            (category,) = category
 
-    async def inc(
-            self, identifier_data: IdentifierData, value: Union[int, float],
-            default: Union[int, float]
-    ) -> Union[int, float]:
-        try:
-            return await self._execute(
-                f"SELECT red_config.inc($1, $2, $3)",
-                encode_identifier_data(identifier_data),
-                value,
-                default,
-                method=self._pool.fetchval,
-            )
-        except asyncpg.WrongObjectTypeError as exc:
-            raise errors.StoredTypeError(*exc.args)
+        identifier_string = "$"
+        if full_identifiers:
+            identifier_string += "." + ".".join(full_identifiers)
+        if not category:
+            async with self._lock:  # Changing the generic schema ... is painful...
+                self.db.close()
+                self.data_path.unlink()
+                self.db = APSWConnectionWrapper(str(self.data_path))
+            return
+        else:
+            query = _clear_query.format(table_name=category)
+        async with self._lock:
+            await self._execute(query, category, path=identifier_string)
 
-    async def toggle(self, identifier_data: IdentifierData, default: bool) -> bool:
-        try:
-            return await self._execute(
-                "SELECT red_config.inc($1, $2)",
-                encode_identifier_data(identifier_data),
-                default,
-                method=self._pool.fetchval,
-            )
-        except asyncpg.WrongObjectTypeError as exc:
-            raise errors.StoredTypeError(*exc.args)
-
-    @classmethod
-    async def _execute(cls, query: str, *args, method: Optional[Callable] = None) -> Any:
-        if method is None:
-            method = cls._pool.execute
+    async def _execute(
+        self,
+        query: str,
+        category: str,
+        type_query: Optional[str] = None,
+        path: Optional[str] = None,
+        data: Optional[str] = ...,
+    ) -> Any:
         log.invisible("Query: %s", query)
-        if args:
-            log.invisible("Args: %s", args)
-        return await method(query, *args)
+        if category:
+            self.db.cursor().execute(_create_table.format(table_name=category))
+            self.db.cursor().execute(_prep_query.format(table_name=category))
+        if type_query:
+            obj_type = self.db.cursor().execute(type_query, (path,))
+            obj_type = obj_type.fetchone()
+            obj_type = obj_type[0]
+            if obj_type is None:
+                raise KeyError
+        else:
+            obj_type = ...
+        _data = {
+            "path": path,
+        }
+        if data is not ...:
+            _data.update({"value": data})
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            for future in concurrent.futures.as_completed(
+                [executor.submit(self.db.cursor().execute, query, _data)]
+            ):
+                output = future.result()
+                output = output.fetchone()
+                if obj_type is ...:
+                    return
+                output = output[0]
+                if obj_type in ["true", "false"] and isinstance(output, int):
+                    output = bool(output)
+                elif obj_type not in ["text"] and isinstance(output, str):
+                    output = json.loads(output)
 
+        return output
 
     @classmethod
     async def aiter_cogs(cls) -> AsyncIterator[Tuple[str, str]]:
         yield "Core", "0"
         for cog_name in data_manager.cog_data_path().iterdir():
             for cog_id in cog_name.iterdir():
-                yield cog_name.stem, cog_id.stem
+                if cog_id.suffix in {".rdb"}:
+                    yield cog_name.stem, cog_id.stem
 
     @classmethod
     async def delete_all_data(
-            cls, *, interactive: bool = False, drop_db: Optional[bool] = None, **kwargs
+        cls, *, interactive: bool = False, drop_db: Optional[bool] = None, **kwargs
     ) -> None:
         """Delete all data being stored by this driver.
 
@@ -188,11 +224,10 @@ class SQLDriver(BaseDriver):
         if interactive is True and drop_db is None:
             print(
                 "Please choose from one of the following options:\n"
-                " 1. Drop the entire PostgreSQL database for this instance, or\n"
-                " 2. Delete all of Red's data within this database, without dropping the database "
-                "itself."
+                "0. Keeps Reds data saved in the existing databases"
+                " 1. Delete all of Red's data."
             )
-            options = ("1", "2")
+            options = ("0", "1")
             while True:
                 resp = input("> ")
                 try:
@@ -201,12 +236,11 @@ class SQLDriver(BaseDriver):
                     print("Please type a number corresponding to one of the options.")
                 else:
                     break
-        if drop_db is True:
-            if cls.data_path and cls.data_path.exists():
-                cls.data_path.unlink()
-        else:
-            with DROP_DDL_SCRIPT_PATH.open() as fs:
-                await cls._pool.execute(fs.read())
+        if drop_db:
+            for cog_name in data_manager.cog_data_path().iterdir():
+                for cog_id in cog_name.iterdir():
+                    if cog_id.suffix in {".rdb"}:
+                        cog_id.unlink()
 
     async def import_data(self, cog_data, custom_group_data):
         log.info(f"Converting Cog: {self.cog_name}")
@@ -238,5 +272,5 @@ class SQLDriver(BaseDriver):
             )
             try:
                 await self.set(ident_data, data)
-            except Exception as err:
-                log.critical(f"Error saving: {ident_data.__repr__()}: {data}", exc_info=err)
+            except Exception as exc:
+                log.critical(f"{exc} when saving: {ident_data.__repr__()}: {data}")
