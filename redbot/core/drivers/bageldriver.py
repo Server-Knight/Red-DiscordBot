@@ -50,7 +50,11 @@ class BagelDriver(BaseDriver):
         cls.__base_url = host
         cls.__sockets = sockets
         cls.__timeout = ClientTimeout(total=timeout)
-        cls.__connector = None
+        cls.__connector = (
+            aiohttp.UnixConnector(path=cls.__sockets, keepalive_timeout=15.0, limit=0)
+            if cls.__sockets
+            else None
+        )
         cls.__connector_owner = False if cls.__connector else True
         cls.__default_headers = {"Authorization": cls.__token}
 
@@ -110,7 +114,7 @@ class BagelDriver(BaseDriver):
         try:
             async with aiohttp.ClientSession(
                 json_serialize=json.dumps,
-                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                connector=self.__connector,
                 timeout=self.__timeout,
                 connector_owner=self.__connector_owner,
                 headers=self.__default_headers,
@@ -131,7 +135,7 @@ class BagelDriver(BaseDriver):
         try:
             async with aiohttp.ClientSession(
                 json_serialize=json.dumps,
-                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                connector=self.__connector,
                 timeout=self.__timeout,
                 connector_owner=self.__connector_owner,
                 headers=self.__default_headers,
@@ -159,7 +163,7 @@ class BagelDriver(BaseDriver):
         try:
             async with aiohttp.ClientSession(
                 json_serialize=json.dumps,
-                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                connector=self.__connector,
                 timeout=self.__timeout,
                 connector_owner=self.__connector_owner,
                 headers=self.__default_headers,
@@ -186,7 +190,7 @@ class BagelDriver(BaseDriver):
             full_identifiers = identifier_data.to_dict()
             async with aiohttp.ClientSession(
                 json_serialize=json.dumps,
-                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                connector=self.__connector,
                 timeout=self.__timeout,
                 connector_owner=self.__connector_owner,
                 headers=self.__default_headers,
@@ -217,7 +221,7 @@ class BagelDriver(BaseDriver):
             full_identifiers = identifier_data.to_dict()
             async with aiohttp.ClientSession(
                 json_serialize=json.dumps,
-                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                connector=self.__connector,
                 timeout=self.__timeout,
                 connector_owner=self.__connector_owner,
                 headers=self.__default_headers,
@@ -247,7 +251,7 @@ class BagelDriver(BaseDriver):
         try:
             async with aiohttp.ClientSession(
                 json_serialize=json.dumps,
-                connector=aiohttp.UnixConnector(path=cls.__sockets) if cls.__sockets else None,
+                connector=cls.__connector,
                 timeout=cls.__timeout,
                 connector_owner=cls.__connector_owner,
                 headers=cls.__default_headers,
@@ -269,7 +273,7 @@ class BagelDriver(BaseDriver):
         try:
             async with aiohttp.ClientSession(
                 json_serialize=json.dumps,
-                connector=aiohttp.UnixConnector(path=cls.__sockets) if cls.__sockets else None,
+                connector=cls.__connector,
                 timeout=cls.__timeout,
                 connector_owner=cls.__connector_owner,
                 headers=cls.__default_headers,
