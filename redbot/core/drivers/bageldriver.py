@@ -73,26 +73,24 @@ class JsonPayload(BytesPayload):
 class BagelDriver(BaseDriver):
     __token: Optional[str] = None
     __base_url: Optional[str] = None
-    __session: Optional[aiohttp.ClientSession] = None
     _decoder: str = "orjson" if orjson else "ujson"
+    __sockets: Optional[str] = None
+    __timeout: int = 1
 
     @classmethod
     async def initialize(cls, **storage_details) -> None:
         host = storage_details["host"]
         password = storage_details["password"]
         sockets = storage_details["unix_socket"]
+        timeout = storage_details.get("timeout", 5)
         cls.__token = password
         cls.__base_url = host
-        cls.__session = aiohttp.ClientSession(
-            json_serialize=cls._dump_to_string,
-            connector=aiohttp.UnixConnector(path=sockets) if sockets else None,
-            timeout=ClientTimeout(total=1),
-        )
+        cls.__sockets = sockets
+        cls.__timeout = timeout
 
     @classmethod
     async def teardown(cls) -> None:
-        if cls.__session and not cls.__session.closed:
-            await cls.__session.close()
+        return
 
     @staticmethod
     def get_config_details():
@@ -124,57 +122,91 @@ class BagelDriver(BaseDriver):
             )
             or None
         )
-        return {"host": host, "password": password, "unix_socket": sockets}
+        print(
+            "Enter the connection timeout.\nIf left blank, this will default to 5:\n - 5.\n"
+        )
+        while True:
+            timeout = input("> ") or 5
+            if timeout == 5:
+                break
+
+            try:
+                timeout = int(timeout)
+                if timeout < 1:
+                    raise ValueError
+            except ValueError:
+                print("Timeout must be a number greater than 0")
+            else:
+                break
+        return {"host": host, "password": password, "unix_socket": sockets, "timeout": timeout}
 
     async def get(self, identifier_data: IdentifierData):
         full_identifiers = identifier_data.to_dict()
         try:
-            async with self.__session.post(
-                url=_GET_ENDPOINT.replace("{base}", self.__base_url),
-                headers={"Authorization": self.__token},
-                data=JsonPayload({"identifier": full_identifiers}),
-            ) as response:
-                if response.status == 200:
-                    return self._load_to_string(await response.json(loads=json_loads))
-                else:
-                    raise KeyError
-        except asyncio.exceptions.TimeoutError:
+            async with aiohttp.ClientSession(
+                json_serialize=self._dump_to_string,
+                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                timeout=ClientTimeout(total=self.__timeout),
+            ) as session:
+                async with session.post(
+                    url=_GET_ENDPOINT.replace("{base}", self.__base_url),
+                    headers={"Authorization": self.__token},
+                    data=JsonPayload({"identifier": full_identifiers}),
+                ) as response:
+                    if response.status == 200:
+                        return self._load_to_string(await response.json(loads=json_loads))
+                    else:
+                        raise KeyError
+        except (asyncio.TimeoutError, aiohttp.ClientConnectorError):
             return await self.get(identifier_data=identifier_data)
 
     async def set(self, identifier_data: IdentifierData, value=None):
         full_identifiers = identifier_data.to_dict()
         try:
-            async with self.__session.put(
-                url=_SET_ENDPOINT.replace("{base}", self.__base_url),
-                headers={"Authorization": self.__token},
-                data=JsonPayload(
-                    {"identifier": full_identifiers, "config_data": self._dump_to_string(value)}
-                ),
-            ) as response:
-                response_output = await response.json(loads=json_loads)
-                if response.status == 200:
-                    response_output = self._load_to_string(response_output)
-                    return response_output.get("value")
-                else:
-                    raise errors.ConfigError(str(response_output))
-        except asyncio.exceptions.TimeoutError:
+            async with aiohttp.ClientSession(
+                json_serialize=self._dump_to_string,
+                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                timeout=ClientTimeout(total=self.__timeout),
+            ) as session:
+                async with session.put(
+                    url=_SET_ENDPOINT.replace("{base}", self.__base_url),
+                    headers={"Authorization": self.__token},
+                    data=JsonPayload(
+                        {
+                            "identifier": full_identifiers,
+                            "config_data": self._dump_to_string(value),
+                        }
+                    ),
+                ) as response:
+                    response_output = await response.json(loads=json_loads)
+                    if response.status == 200:
+                        response_output = self._load_to_string(response_output)
+                        return response_output.get("value")
+                    else:
+                        raise errors.ConfigError(str(response_output))
+        except (asyncio.TimeoutError, aiohttp.ClientConnectorError):
             return await self.set(identifier_data=identifier_data, value=value)
 
     async def clear(self, identifier_data: IdentifierData):
         full_identifiers = identifier_data.to_dict()
         try:
-            async with self.__session.put(
-                url=_CLEAR_ENDPOINT.replace("{base}", self.__base_url),
-                headers={"Authorization": self.__token},
-                data=JsonPayload({"identifier": full_identifiers}),
-            ) as response:
-                response_output = await response.json(loads=json_loads)
-                if response.status == 200:
-                    response_output = self._load_to_string(response_output)
-                    return response_output.get("value")
-                else:
-                    raise errors.ConfigError(str(response_output))
-        except asyncio.exceptions.TimeoutError:
+            async with aiohttp.ClientSession(
+                json_serialize=self._dump_to_string,
+                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                timeout=ClientTimeout(total=self.__timeout),
+            ) as session:
+                async with session.put(
+                    url=_CLEAR_ENDPOINT.replace("{base}", self.__base_url),
+                    headers={"Authorization": self.__token},
+                    data=JsonPayload({"identifier": full_identifiers}),
+                ) as response:
+                    response_output = await response.json(loads=json_loads)
+                    if response.status == 200:
+                        response_output = self._load_to_string(response_output)
+                        return response_output.get("value")
+                    else:
+                        raise errors.ConfigError(str(response_output))
+        except (asyncio.TimeoutError, aiohttp.ClientConnectorError):
             return await self.clear(identifier_data=identifier_data)
 
     async def inc(
@@ -185,24 +217,29 @@ class BagelDriver(BaseDriver):
     ) -> Union[int, float]:
         try:
             full_identifiers = identifier_data.to_dict()
-            async with self.__session.put(
-                url=_INCREMENT_ENDPOINT.replace("{base}", self.__base_url),
-                headers={"Authorization": self.__token},
-                data=JsonPayload(
-                    {
-                        "identifier": full_identifiers,
-                        "config_data": self._dump_to_string(value),
-                        "default": self._dump_to_string(default),
-                    }
-                ),
-            ) as response:
-                response_output = await response.json(loads=json_loads)
-                if response.status == 200:
-                    response_output = self._load_to_string(response_output)
-                    return response_output.get("value")
-                else:
-                    raise errors.ConfigError(str(response_output))
-        except asyncio.exceptions.TimeoutError:
+            async with aiohttp.ClientSession(
+                json_serialize=self._dump_to_string,
+                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                timeout=ClientTimeout(total=self.__timeout),
+            ) as session:
+                async with session.put(
+                    url=_INCREMENT_ENDPOINT.replace("{base}", self.__base_url),
+                    headers={"Authorization": self.__token},
+                    data=JsonPayload(
+                        {
+                            "identifier": full_identifiers,
+                            "config_data": self._dump_to_string(value),
+                            "default": self._dump_to_string(default),
+                        }
+                    ),
+                ) as response:
+                    response_output = await response.json(loads=json_loads)
+                    if response.status == 200:
+                        response_output = self._load_to_string(response_output)
+                        return response_output.get("value")
+                    else:
+                        raise errors.ConfigError(str(response_output))
+        except (asyncio.TimeoutError, aiohttp.ClientConnectorError):
             return await self.inc(identifier_data=identifier_data, value=value, default=default)
 
     async def toggle(
@@ -210,54 +247,69 @@ class BagelDriver(BaseDriver):
     ) -> bool:
         try:
             full_identifiers = identifier_data.to_dict()
-            async with self.__session.put(
-                url=_TOGGLE_ENDPOINT.replace("{base}", self.__base_url),
-                headers={"Authorization": self.__token},
-                data=JsonPayload(
-                    {
-                        "identifier": full_identifiers,
-                        "config_data": self._dump_to_string(value),
-                        "default": self._dump_to_string(default),
-                    }
-                ),
-            ) as response:
-                response_output = await response.json(loads=json_loads)
-                if response.status == 200:
-                    response_output = self._load_to_string(response_output)
-                    return response_output.get("value")
-                else:
-                    raise errors.ConfigError(str(response_output))
-        except asyncio.exceptions.TimeoutError:
+            async with aiohttp.ClientSession(
+                json_serialize=self._dump_to_string,
+                connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
+                timeout=ClientTimeout(total=self.__timeout),
+            ) as session:
+                async with session.put(
+                    url=_TOGGLE_ENDPOINT.replace("{base}", self.__base_url),
+                    headers={"Authorization": self.__token},
+                    data=JsonPayload(
+                        {
+                            "identifier": full_identifiers,
+                            "config_data": self._dump_to_string(value),
+                            "default": self._dump_to_string(default),
+                        }
+                    ),
+                ) as response:
+                    response_output = await response.json(loads=json_loads)
+                    if response.status == 200:
+                        response_output = self._load_to_string(response_output)
+                        return response_output.get("value")
+                    else:
+                        raise errors.ConfigError(str(response_output))
+        except (asyncio.TimeoutError, aiohttp.ClientConnectorError):
             return await self.toggle(identifier_data=identifier_data, value=value, default=default)
 
     @classmethod
     async def delete_all_data(cls, **kwargs) -> None:
         """Delete all data being stored by this driver."""
         try:
-            async with cls.__session.put(
-                url=_CLEAR_ALL_ENDPOINT.replace("{base}", cls.__base_url),
-                headers={"Authorization": cls.__token},
-                param={"i_want_to_do_this": True},
-            ) as response:
-                response_output = await response.json(loads=json_loads)
-                if response.status == 200:
-                    response_output = cls._load_to_string(response_output)
-                    return response_output.get("value")
-                else:
-                    raise errors.ConfigError(str(response_output))
-        except asyncio.exceptions.TimeoutError:
+            async with aiohttp.ClientSession(
+                json_serialize=cls._dump_to_string,
+                connector=aiohttp.UnixConnector(path=cls.__sockets) if cls.__sockets else None,
+                timeout=ClientTimeout(total=cls.__timeout),
+            ) as session:
+                async with session.put(
+                    url=_CLEAR_ALL_ENDPOINT.replace("{base}", cls.__base_url),
+                    headers={"Authorization": cls.__token},
+                    param={"i_want_to_do_this": True},
+                ) as response:
+                    response_output = await response.json(loads=json_loads)
+                    if response.status == 200:
+                        response_output = cls._load_to_string(response_output)
+                        return response_output.get("value")
+                    else:
+                        raise errors.ConfigError(str(response_output))
+        except (asyncio.TimeoutError, aiohttp.ClientConnectorError):
             return await cls.delete_all_data(**kwargs)
 
     @classmethod
     async def aiter_cogs(cls) -> AsyncIterator[Tuple[str, str]]:
         try:
-            async with cls.__session.post(
-                url=_AITER_COGS_ENDPOINT.replace("{base}", cls.__base_url),
-                headers={"Authorization": cls.__token},
-            ) as response:
-                response_output = await response.json(loads=json_loads)
-                return cls._load_to_string(response_output)
-        except asyncio.exceptions.TimeoutError:
+            async with aiohttp.ClientSession(
+                json_serialize=cls._dump_to_string,
+                connector=aiohttp.UnixConnector(path=cls.__sockets) if cls.__sockets else None,
+                timeout=ClientTimeout(total=cls.__timeout),
+            ) as session:
+                async with session.post(
+                    url=_AITER_COGS_ENDPOINT.replace("{base}", cls.__base_url),
+                    headers={"Authorization": cls.__token},
+                ) as response:
+                    response_output = await response.json(loads=json_loads)
+                    return cls._load_to_string(response_output)
+        except (asyncio.TimeoutError, aiohttp.ClientConnectorError):
             return await cls.aiter_cogs()
 
     async def import_data(self, cog_data, custom_group_data):
