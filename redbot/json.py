@@ -7,7 +7,7 @@ MODULES = ("orjson", "ujson")
 mainjson = None
 
 
-__all__ = ["dump", "dumps", "load", "loads"]
+__all__ = ["dump", "dumps", "load", "loads", "json_module"]
 
 
 def import_modules():
@@ -24,24 +24,25 @@ for item in MODULES:
     with contextlib.suppress(ValueError):
         index = MODULES_NAME.index(item)
         mainjson = MODULES_IMPORTS[index]
-
         if mainjson:
+            json_module = item
             break
 
 if mainjson is None:
     mainjson = stblib_json
+    json_module = "json"
 
 
 def dumps(obj, **kw):
     output = mainjson.dumps(obj)
-    if hasattr(output, "decode"):
+    if json_module == "orjson" and hasattr(output, "decode"):
         output = output.decode("utf-8")
     return output
 
 
 def loads(obj, **kw):
     output = mainjson.loads(obj)
-    if hasattr(output, "decode"):
+    if json_module == "orjson" and hasattr(output, "decode"):
         output = output.decode("utf-8")
     return output
 
@@ -53,3 +54,6 @@ def dump(obj, fp, **kw):
 def load(fp, **kw):
     data = fp.read()
     return loads(data, **kw)
+
+
+print(mainjson.__name__)

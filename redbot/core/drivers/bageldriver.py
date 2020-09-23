@@ -1,34 +1,14 @@
 import asyncio
 import getpass
-from typing import Any, Final, Optional, Union, AsyncIterator, Tuple
+from typing import Any, Dict, Final, Optional, Union, AsyncIterator, Tuple
 
 import aiohttp
-from aiohttp import BytesPayload, ClientTimeout
-from aiohttp.typedefs import JSONEncoder
+from aiohttp import ClientTimeout, JsonPayload
 
+from redbot import json
 from redbot.core import errors
 from redbot.core.drivers.log import log
 from secrets import compare_digest
-
-try:
-    import orjson
-
-    ujson = None
-    json_loads = orjson.loads
-    json_dumps = orjson.dumps
-except ImportError:
-    try:
-        import ujson
-
-        orjson = None
-        json_loads = ujson.loads
-        json_dumps = ujson.dumps
-    except ImportError:
-        import json as ujson
-
-        orjson = None
-        json_loads = ujson.loads
-        json_dumps = ujson.dumps
 
 
 from .base import BaseDriver, IdentifierData, ConfigCategory
@@ -45,37 +25,20 @@ _CLEAR_ENDPOINT: Final[str] = "{base}/config/clear"
 _CLEAR_ALL_ENDPOINT: Final[str] = "{base}/config/clear_all"
 
 
-class JsonPayload(BytesPayload):
-    def __init__(
-        self,
-        value: Any,
-        encoding: str = "utf-8",
-        content_type: str = "application/json",
-        dumps: JSONEncoder = json_dumps,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        if orjson:
-            super().__init__(
-                dumps(value), content_type=content_type, encoding=encoding, *args, **kwargs
-            )
-        else:
-            super().__init__(
-                dumps(value).encode(encoding),
-                content_type=content_type,
-                encoding=encoding,
-                *args,
-                **kwargs,
-            )
-
-
 # noinspection PyProtectedMember
 class BagelDriver(BaseDriver):
     __token: Optional[str] = None
     __base_url: Optional[str] = None
-    _decoder: str = "orjson" if orjson else "ujson"
     __sockets: Optional[str] = None
-    __timeout: int = 1
+    __timeout: Optional[ClientTimeout] = None
+    __connector: Optional[aiohttp.UnixConnector] = None
+    __connector_owner: bool = False
+    __default_headers: Dict[str, Any] = {}
+    __serializer: str = json.json_module
+
+    @property
+    def serializer(self):
+        return self.__serializer
 
     @classmethod
     async def initialize(cls, **storage_details) -> None:
@@ -86,11 +49,15 @@ class BagelDriver(BaseDriver):
         cls.__token = password
         cls.__base_url = host
         cls.__sockets = sockets
-        cls.__timeout = timeout
+        cls.__timeout = ClientTimeout(total=timeout)
+        cls.__connector = None
+        cls.__connector_owner = False if cls.__connector else True
+        cls.__default_headers = {"Authorization": cls.__token}
 
     @classmethod
     async def teardown(cls) -> None:
-        return
+        if cls.__connector is not None:
+            await cls.__connector.close()
 
     @staticmethod
     def get_config_details():
@@ -122,9 +89,7 @@ class BagelDriver(BaseDriver):
             )
             or None
         )
-        print(
-            "Enter the connection timeout.\nIf left blank, this will default to 5:\n - 5.\n"
-        )
+        print("Enter the connection timeout.\nIf left blank, this will default to 5:\n - 5.\n")
         while True:
             timeout = input("> ") or 5
             if timeout == 5:
@@ -144,17 +109,18 @@ class BagelDriver(BaseDriver):
         full_identifiers = identifier_data.to_dict()
         try:
             async with aiohttp.ClientSession(
-                json_serialize=self._dump_to_string,
+                json_serialize=json.dumps,
                 connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
-                timeout=ClientTimeout(total=self.__timeout),
+                timeout=self.__timeout,
+                connector_owner=self.__connector_owner,
+                headers=self.__default_headers,
             ) as session:
                 async with session.post(
                     url=_GET_ENDPOINT.replace("{base}", self.__base_url),
-                    headers={"Authorization": self.__token},
-                    data=JsonPayload({"identifier": full_identifiers}),
+                    data=JsonPayload({"identifier": full_identifiers}, dumps=json.dumps),
                 ) as response:
                     if response.status == 200:
-                        return self._load_to_string(await response.json(loads=json_loads))
+                        return await response.json(loads=json.loads)
                     else:
                         raise KeyError
         except (asyncio.TimeoutError, aiohttp.ClientConnectorError):
@@ -164,23 +130,24 @@ class BagelDriver(BaseDriver):
         full_identifiers = identifier_data.to_dict()
         try:
             async with aiohttp.ClientSession(
-                json_serialize=self._dump_to_string,
+                json_serialize=json.dumps,
                 connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
-                timeout=ClientTimeout(total=self.__timeout),
+                timeout=self.__timeout,
+                connector_owner=self.__connector_owner,
+                headers=self.__default_headers,
             ) as session:
                 async with session.put(
                     url=_SET_ENDPOINT.replace("{base}", self.__base_url),
-                    headers={"Authorization": self.__token},
                     data=JsonPayload(
                         {
                             "identifier": full_identifiers,
-                            "config_data": self._dump_to_string(value),
-                        }
+                            "config_data": json.dumps(value),
+                        },
+                        dumps=json.dumps,
                     ),
                 ) as response:
-                    response_output = await response.json(loads=json_loads)
+                    response_output = await response.json(loads=json.loads)
                     if response.status == 200:
-                        response_output = self._load_to_string(response_output)
                         return response_output.get("value")
                     else:
                         raise errors.ConfigError(str(response_output))
@@ -191,18 +158,18 @@ class BagelDriver(BaseDriver):
         full_identifiers = identifier_data.to_dict()
         try:
             async with aiohttp.ClientSession(
-                json_serialize=self._dump_to_string,
+                json_serialize=json.dumps,
                 connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
-                timeout=ClientTimeout(total=self.__timeout),
+                timeout=self.__timeout,
+                connector_owner=self.__connector_owner,
+                headers=self.__default_headers,
             ) as session:
                 async with session.put(
                     url=_CLEAR_ENDPOINT.replace("{base}", self.__base_url),
-                    headers={"Authorization": self.__token},
-                    data=JsonPayload({"identifier": full_identifiers}),
+                    data=JsonPayload({"identifier": full_identifiers}, dumps=json.dumps),
                 ) as response:
-                    response_output = await response.json(loads=json_loads)
+                    response_output = await response.json(loads=json.loads)
                     if response.status == 200:
-                        response_output = self._load_to_string(response_output)
                         return response_output.get("value")
                     else:
                         raise errors.ConfigError(str(response_output))
@@ -218,24 +185,25 @@ class BagelDriver(BaseDriver):
         try:
             full_identifiers = identifier_data.to_dict()
             async with aiohttp.ClientSession(
-                json_serialize=self._dump_to_string,
+                json_serialize=json.dumps,
                 connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
-                timeout=ClientTimeout(total=self.__timeout),
+                timeout=self.__timeout,
+                connector_owner=self.__connector_owner,
+                headers=self.__default_headers,
             ) as session:
                 async with session.put(
                     url=_INCREMENT_ENDPOINT.replace("{base}", self.__base_url),
-                    headers={"Authorization": self.__token},
                     data=JsonPayload(
                         {
                             "identifier": full_identifiers,
-                            "config_data": self._dump_to_string(value),
-                            "default": self._dump_to_string(default),
-                        }
+                            "config_data": json.dumps(value),
+                            "default": json.dumps(default),
+                        },
+                        dumps=json.dumps,
                     ),
                 ) as response:
-                    response_output = await response.json(loads=json_loads)
+                    response_output = await response.json(loads=json.loads)
                     if response.status == 200:
-                        response_output = self._load_to_string(response_output)
                         return response_output.get("value")
                     else:
                         raise errors.ConfigError(str(response_output))
@@ -248,24 +216,25 @@ class BagelDriver(BaseDriver):
         try:
             full_identifiers = identifier_data.to_dict()
             async with aiohttp.ClientSession(
-                json_serialize=self._dump_to_string,
+                json_serialize=json.dumps,
                 connector=aiohttp.UnixConnector(path=self.__sockets) if self.__sockets else None,
-                timeout=ClientTimeout(total=self.__timeout),
+                timeout=self.__timeout,
+                connector_owner=self.__connector_owner,
+                headers=self.__default_headers,
             ) as session:
                 async with session.put(
                     url=_TOGGLE_ENDPOINT.replace("{base}", self.__base_url),
-                    headers={"Authorization": self.__token},
                     data=JsonPayload(
                         {
                             "identifier": full_identifiers,
-                            "config_data": self._dump_to_string(value),
-                            "default": self._dump_to_string(default),
-                        }
+                            "config_data": json.dumps(value),
+                            "default": json.dumps(default),
+                        },
+                        dumps=json.dumps,
                     ),
                 ) as response:
-                    response_output = await response.json(loads=json_loads)
+                    response_output = await response.json(loads=json.loads)
                     if response.status == 200:
-                        response_output = self._load_to_string(response_output)
                         return response_output.get("value")
                     else:
                         raise errors.ConfigError(str(response_output))
@@ -277,18 +246,18 @@ class BagelDriver(BaseDriver):
         """Delete all data being stored by this driver."""
         try:
             async with aiohttp.ClientSession(
-                json_serialize=cls._dump_to_string,
+                json_serialize=json.dumps,
                 connector=aiohttp.UnixConnector(path=cls.__sockets) if cls.__sockets else None,
-                timeout=ClientTimeout(total=cls.__timeout),
+                timeout=cls.__timeout,
+                connector_owner=cls.__connector_owner,
+                headers=cls.__default_headers,
             ) as session:
                 async with session.put(
                     url=_CLEAR_ALL_ENDPOINT.replace("{base}", cls.__base_url),
-                    headers={"Authorization": cls.__token},
                     param={"i_want_to_do_this": True},
                 ) as response:
-                    response_output = await response.json(loads=json_loads)
+                    response_output = await response.json(loads=json.loads)
                     if response.status == 200:
-                        response_output = cls._load_to_string(response_output)
                         return response_output.get("value")
                     else:
                         raise errors.ConfigError(str(response_output))
@@ -299,16 +268,16 @@ class BagelDriver(BaseDriver):
     async def aiter_cogs(cls) -> AsyncIterator[Tuple[str, str]]:
         try:
             async with aiohttp.ClientSession(
-                json_serialize=cls._dump_to_string,
+                json_serialize=json.dumps,
                 connector=aiohttp.UnixConnector(path=cls.__sockets) if cls.__sockets else None,
-                timeout=ClientTimeout(total=cls.__timeout),
+                timeout=cls.__timeout,
+                connector_owner=cls.__connector_owner,
+                headers=cls.__default_headers,
             ) as session:
                 async with session.post(
                     url=_AITER_COGS_ENDPOINT.replace("{base}", cls.__base_url),
-                    headers={"Authorization": cls.__token},
                 ) as response:
-                    response_output = await response.json(loads=json_loads)
-                    return cls._load_to_string(response_output)
+                    return await response.json(loads=json.loads)
         except (asyncio.TimeoutError, aiohttp.ClientConnectorError):
             return await cls.aiter_cogs()
 
@@ -344,18 +313,3 @@ class BagelDriver(BaseDriver):
                 await self.set(ident_data, data)
             except Exception as err:
                 log.critical(f"Error saving: {ident_data.__repr__()}: {data}", exc_info=err)
-
-    @staticmethod
-    def _load_to_string(value: Any) -> Any:
-        if not orjson:
-            return value
-        if hasattr(value, "decode"):
-            return value.decode("utf-8")
-        return value
-
-    @staticmethod
-    def _dump_to_string(value: Any) -> Any:
-        if not orjson:
-            return ujson.dumps(value)
-        else:
-            return orjson.dumps(value).decode("utf-8")
