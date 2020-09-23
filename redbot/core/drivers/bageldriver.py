@@ -33,7 +33,7 @@ except ImportError:
 
 from .base import BaseDriver, IdentifierData, ConfigCategory
 
-__all__ = ["APIDriver"]
+__all__ = ["BagelDriver"]
 
 
 _GET_ENDPOINT: Final[str] = "{base}/config/get"
@@ -70,7 +70,7 @@ class JsonPayload(BytesPayload):
 
 
 # noinspection PyProtectedMember
-class APIDriver(BaseDriver):
+class BagelDriver(BaseDriver):
     __token: Optional[str] = None
     __base_url: Optional[str] = None
     __session: Optional[aiohttp.ClientSession] = None
