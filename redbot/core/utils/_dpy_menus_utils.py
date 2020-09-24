@@ -176,6 +176,7 @@ class HybridMenu(_dpy_menus.MenuPages, inherit_buttons=False):
 
     async def _internal_loop(self):
         try:
+            self.__timed_out = False
             loop = self.bot.loop
             # Ensure the name exists for the cancellation handling
             tasks = []
@@ -220,7 +221,7 @@ class HybridMenu(_dpy_menus.MenuPages, inherit_buttons=False):
                 # consider this my warning.
 
         except asyncio.TimeoutError:
-            pass
+            self.__timed_out = True
         finally:
             self._event.set()
 
@@ -229,9 +230,11 @@ class HybridMenu(_dpy_menus.MenuPages, inherit_buttons=False):
                 task.cancel()
 
             try:
-                await self.finalize()
+                await self.finalize(self.__timed_out)
             except Exception:
                 pass
+            finally:
+                self.__timed_out = False
 
             # Can't do any requests if the bot is closed
             if self.bot.is_closed():
