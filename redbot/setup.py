@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
 import contextlib
-import json
 import logging
 import os
 import sys
@@ -13,6 +12,7 @@ from typing import Dict, Any, Optional, Union
 import appdirs
 import click
 
+from redbot import json
 from redbot.core.cli import confirm
 from redbot.core.utils._internal_utils import safe_delete, create_backup as red_create_backup
 from redbot.core import config, data_manager, drivers

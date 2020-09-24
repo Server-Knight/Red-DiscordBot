@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, List, Mapping, MutableMapping, Optional, Tuple
 
 import aiohttp
 
+from redbot import json
 from redbot.core import Config
 from redbot.core.bot import Red
 from redbot.core.commands import Cog, Context

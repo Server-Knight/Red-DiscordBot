@@ -1,6 +1,5 @@
 from __future__ import annotations
 import asyncio
-import json
 import logging
 from asyncio import as_completed, Semaphore
 from asyncio.futures import isfuture
@@ -24,6 +23,7 @@ from typing import (
 )
 
 from discord.utils import maybe_coroutine
+from redbot import json
 
 __all__ = (
     "bounded_gather",

@@ -54,4 +54,3 @@ def dump(obj, fp, **kw):
 def load(fp, **kw):
     data = fp.read()
     return loads(data, **kw)
-

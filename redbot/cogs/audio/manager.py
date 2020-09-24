@@ -15,6 +15,7 @@ from typing import ClassVar, Final, List, Optional, Pattern, Tuple
 import aiohttp
 from tqdm import tqdm
 
+from redbot import json
 from redbot.core import data_manager
 from redbot.core.i18n import Translator
 

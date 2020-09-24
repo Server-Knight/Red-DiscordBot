@@ -1,5 +1,4 @@
 import inspect
-import json
 import logging
 import os
 import sys
@@ -9,7 +8,9 @@ from pathlib import Path
 from typing import Any, Dict
 
 import appdirs
+
 from discord.utils import deprecated
+from redbot import json
 
 from . import commands
 

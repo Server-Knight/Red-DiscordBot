@@ -3,7 +3,6 @@
 import asyncio
 import functools
 import getpass
-import json
 import logging
 import os
 import pip
@@ -22,7 +21,7 @@ import discord
 # Set the event loop policies here so any subsequent `new_event_loop()`
 # calls, in particular those as a result of the following imports,
 # return the correct loop object.
-from redbot import _update_event_loop_policy, __version__
+from redbot import _update_event_loop_policy, __version__, json
 
 _update_event_loop_policy()
 

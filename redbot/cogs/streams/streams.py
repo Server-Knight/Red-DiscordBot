@@ -1,4 +1,5 @@
 import discord
+from redbot import json
 from redbot.core.bot import Red
 from redbot.core import checks, commands, Config
 from redbot.core.i18n import cog_i18n, Translator
@@ -156,7 +157,7 @@ class Streams(commands.Cog):
                 if notified_owner_missing_twitch_secret is False:
                     await send_to_owners_with_prefix_replaced(self.bot, message)
                     await self.config.notified_owner_missing_twitch_secret.set(True)
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
             async with session.post(
                 "https://id.twitch.tv/oauth2/token",
                 params={
@@ -166,7 +167,7 @@ class Streams(commands.Cog):
                 },
             ) as req:
                 try:
-                    data = await req.json()
+                    data = await req.json(loads=json.loads)
                 except aiohttp.ContentTypeError:
                     data = {}
 

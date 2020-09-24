@@ -1,4 +1,3 @@
-import json
 import logging
 from random import choice
 from string import ascii_letters
@@ -7,6 +6,8 @@ from typing import ClassVar, Optional, List
 
 import aiohttp
 import discord
+
+from redbot import json
 
 from .errors import (
     APIError,
@@ -99,7 +100,7 @@ class YoutubeStream(Stream):
         elif not self.name:
             self.name = await self.fetch_name()
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
             async with session.get(YOUTUBE_CHANNEL_RSS.format(channel_id=self.id)) as r:
                 rssdata = await r.text()
 
@@ -119,9 +120,9 @@ class YoutubeStream(Stream):
                 "id": video_id,
                 "part": "id,liveStreamingDetails",
             }
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
                 async with session.get(YOUTUBE_VIDEOS_ENDPOINT, params=params) as r:
-                    data = await r.json()
+                    data = await r.json(loads=json.loads)
                     stream_data = data.get("items", [{}])[0].get("liveStreamingDetails", {})
                     log.debug(f"stream_data for {video_id}: {stream_data}")
                     if (
@@ -143,9 +144,9 @@ class YoutubeStream(Stream):
         # code for this part, as this is only a 2 quota query.
         if self.livestreams:
             params = {"key": self._token["api_key"], "id": self.livestreams[-1], "part": "snippet"}
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
                 async with session.get(YOUTUBE_VIDEOS_ENDPOINT, params=params) as r:
-                    data = await r.json()
+                    data = await r.json(loads=json.loads)
             return self.make_embed(data)
         raise OfflineStream()
 
@@ -176,9 +177,9 @@ class YoutubeStream(Stream):
         else:
             params["id"] = self.id
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
             async with session.get(YOUTUBE_CHANNELS_ENDPOINT, params=params) as r:
-                data = await r.json()
+                data = await r.json(loads=json.loads)
 
         if (
             "error" in data
@@ -222,9 +223,9 @@ class TwitchStream(Stream):
             header = {**header, "Authorization": f"Bearer {self._bearer}"}
         params = {"user_id": self.id}
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
             async with session.get(url, headers=header, params=params) as r:
-                data = await r.json(encoding="utf-8")
+                data = await r.json(encoding="utf-8", loads=json.loads)
         if r.status == 200:
             if not data["data"]:
                 raise OfflineStream()
@@ -239,30 +240,30 @@ class TwitchStream(Stream):
             game_id = data["game_id"]
             if game_id:
                 params = {"id": game_id}
-                async with aiohttp.ClientSession() as session:
+                async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
                     async with session.get(
                         "https://api.twitch.tv/helix/games", headers=header, params=params
                     ) as r:
-                        game_data = await r.json(encoding="utf-8")
+                        game_data = await r.json(encoding="utf-8", loads=json.loads)
                 if game_data:
                     game_data = game_data["data"][0]
                     data["game_name"] = game_data["name"]
             params = {"to_id": self.id}
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
                 async with session.get(
                     "https://api.twitch.tv/helix/users/follows", headers=header, params=params
                 ) as r:
-                    user_data = await r.json(encoding="utf-8")
+                    user_data = await r.json(encoding="utf-8", loads=json.loads)
             if user_data:
                 followers = user_data["total"]
                 data["followers"] = followers
 
             params = {"id": self.id}
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
                 async with session.get(
                     "https://api.twitch.tv/helix/users", headers=header, params=params
                 ) as r:
-                    user_profile_data = await r.json(encoding="utf-8")
+                    user_profile_data = await r.json(encoding="utf-8", loads=json.loads)
             if user_profile_data:
                 profile_image_url = user_profile_data["data"][0]["profile_image_url"]
                 data["profile_image_url"] = profile_image_url
@@ -285,9 +286,9 @@ class TwitchStream(Stream):
         url = TWITCH_ID_ENDPOINT
         params = {"login": self.name}
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
             async with session.get(url, headers=header, params=params) as r:
-                data = await r.json()
+                data = await r.json(loads=json.loads)
 
         if r.status == 200:
             if not data["data"]:
@@ -333,7 +334,7 @@ class HitboxStream(Stream):
     async def is_online(self):
         url = "https://api.smashcast.tv/media/live/" + self.name
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
             async with session.get(url) as r:
                 # data = await r.json(encoding='utf-8')
                 data = await r.text()
@@ -372,7 +373,7 @@ class PicartoStream(Stream):
     async def is_online(self):
         url = "https://api.picarto.tv/v1/channel/name/" + self.name
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
             async with session.get(url) as r:
                 data = await r.text(encoding="utf-8")
         if r.status == 200:
