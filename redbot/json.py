@@ -55,5 +55,3 @@ def load(fp, **kw):
     data = fp.read()
     return loads(data, **kw)
 
-
-print(mainjson.__name__)
