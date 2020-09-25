@@ -17,6 +17,8 @@ _ = Translator("Audio", Path(__file__))
 
 log = logging.getLogger("red.cogs.Audio.task.callback")
 
+log = logging.getLogger("red.cogs.Audio.task.callback")
+
 
 class CacheLevel:
     __slots__ = ("value",)
