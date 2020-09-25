@@ -26,6 +26,7 @@ from redbot import _update_event_loop_policy, __version__, json
 _update_event_loop_policy()
 
 import redbot.logging
+from redbot import aiohttp
 from redbot.core.bot import Red, ExitCodes
 from redbot.core.cli import interactive_config, confirm, parse_cli_flags
 from redbot.setup import get_data_dir, get_name, save_config
@@ -40,8 +41,6 @@ log = logging.getLogger("red.main")
 #
 #         Made by Twentysix, improved by many
 #
-
-
 def _get_instance_names():
     with data_manager.config_file.open(encoding="utf-8") as fs:
         data = json.load(fs)

@@ -199,6 +199,8 @@ _warnings.filterwarnings("ignore", module=r"fuzzywuzzy.*")
 # Show DeprecationWarning
 _warnings.filterwarnings("default", category=DeprecationWarning)
 
+# Silence the Subclassing warning raised
+_warnings.filterwarnings("ignore", category=DeprecationWarning, module="redbot", lineno=242)
 if "--debug" not in _sys.argv:
     # DEP-WARN
     # Individual warnings - tracked in https://github.com/Cog-Creators/Red-DiscordBot/issues/3529
