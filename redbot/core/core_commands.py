@@ -7,6 +7,8 @@ import keyword
 import logging
 import io
 import random
+from copy import copy
+
 import markdown
 import os
 import re
@@ -36,6 +38,7 @@ from . import (
     errors,
     i18n,
 )
+from .commands import UserInputOptional
 from .utils import AsyncIter
 from .utils._internal_utils import fetch_latest_red_version_info, is_sudo_enabled
 from .utils.predicates import MessagePredicate
@@ -3506,18 +3509,25 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         cls=commands.commands._IsTrueBotOwner,
         name="sudo",
     )
-    async def sudo(self, ctx: commands.Context):
+    async def sudo(self, ctx: commands.Context, *, command: UserInputOptional[str] = None):
         """Enable your bot owner privileges.
 
         Sudo permission is auto removed after interval set with `[p]sudotimer` (Default to 15 minutes).
         """
-        if ctx.author.id not in self.bot.owner_ids:
-            self.bot.owner_ids.add(ctx.author.id)
-            await ctx.send(_("Your bot owner privileges have been enabled."))
-            await asyncio.sleep(delay=await self.bot._config.sudotime())
+        if not command:
+            if ctx.author.id not in self.bot.owner_ids:
+                self.bot.owner_ids.add(ctx.author.id)
+                await ctx.send(_("Your bot owner privileges have been enabled."))
+                await asyncio.sleep(delay=await self.bot._config.sudotime())
+                self.bot.owner_ids.discard(ctx.author.id)
+                return
+            await ctx.send(_("Your bot owner privileges are already enabled."))
+        else:
+            msg = copy(ctx.message)
+            msg.content = ctx.prefix + command
+            new_ctx = await self.get_context(msg, should_unsudo=True)
+            await ctx.command.reinvoke(new_ctx)
             self.bot.owner_ids.discard(ctx.author.id)
-            return
-        await ctx.send(_("Your bot owner privileges are already enabled."))
 
     @_set.command()
     @is_sudo_enabled()
