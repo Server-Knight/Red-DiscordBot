@@ -92,6 +92,7 @@ class RedBase(
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
         self._counter = ProxyCounter()
+        self._owner_sudo_tasks: Dict[int, asyncio.Task] = {}
         self._counter._register_core_counters_raw(
             "Red_Core",
             "on_connect",

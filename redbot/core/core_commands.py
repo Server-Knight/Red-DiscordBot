@@ -40,7 +40,7 @@ from . import (
 )
 from .commands import UserInputOptional
 from .utils import AsyncIter
-from .utils._internal_utils import fetch_latest_red_version_info, is_sudo_enabled
+from .utils._internal_utils import timed_unsudo, fetch_latest_red_version_info, is_sudo_enabled
 from .utils.predicates import MessagePredicate
 from .utils.chat_formatting import (
     box,
@@ -3518,8 +3518,12 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             if ctx.author.id not in self.bot.owner_ids:
                 self.bot.owner_ids.add(ctx.author.id)
                 await ctx.send(_("Your bot owner privileges have been enabled."))
-                await asyncio.sleep(delay=await self.bot._config.sudotime())
-                self.bot.owner_ids.discard(ctx.author.id)
+                if ctx.author.id in self.bot._owner_sudo_tasks:
+                    self.bot._owner_sudo_tasks[ctx.author.id].cancel()
+                    del self.bot._owner_sudo_tasks[ctx.author.id]
+                self.bot._owner_sudo_tasks[ctx.author.id] = asyncio.create_task(
+                    timed_unsudo(ctx.author.id, self.bot)
+                )
                 return
             await ctx.send(_("Your bot owner privileges are already enabled."))
         else:
@@ -3527,7 +3531,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             msg.content = ctx.prefix + command
             new_ctx = await self.bot.get_context(msg)
             try:
-                await new_ctx.command.reinvoke(new_ctx)
+                await new_ctx.command.invoke(new_ctx)
                 self.bot.owner_ids.discard(ctx.author.id)
             except Exception as err:
                 await self.bot.on_command_error(new_ctx, err)
