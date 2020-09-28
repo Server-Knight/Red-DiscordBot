@@ -6,6 +6,8 @@ from .base import IdentifierData, BaseDriver, ConfigCategory
 from .json import JsonDriver
 from .postgres import PostgresDriver
 from .redis import RedisDriver
+from .sql import SQLDriver
+from .bageldriver import BagelDriver
 
 __all__ = [
     "get_driver",
@@ -13,8 +15,10 @@ __all__ = [
     "IdentifierData",
     "BaseDriver",
     "JsonDriver",
+    "BagelDriver",
     "PostgresDriver",
     "RedisDriver",
+    "SQLDriver",
     "BackendType",
 ]
 
@@ -28,15 +32,21 @@ class BackendType(enum.Enum):
     POSTGRES = "Postgres"
     #: RedisJSON storage backend.
     REDIS = "Redis"
+    #: API storage backend
+    Bagel = "Bagel"
+
     # Dead drivers below retained for error handling.
     MONGOV1 = "MongoDB"
     MONGO = "MongoDBV2"
+    SQL = "SQL"
 
 
 _DRIVER_CLASSES = {
     BackendType.JSON: JsonDriver,
     BackendType.POSTGRES: PostgresDriver,
     BackendType.REDIS: RedisDriver,
+    BackendType.SQL: SQLDriver,
+    BackendType.Bagel: BagelDriver,
 }
 
 

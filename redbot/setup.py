@@ -106,7 +106,7 @@ def get_data_dir(instance_name: str):
 
 
 def get_storage_type():
-    storage_dict = {1: "JSON", 2: "PostgreSQL", 3: "RedisJSON"}
+    storage_dict = {1: "JSON", 2: "PostgreSQL", 3: "RedisJSON", 4: "SQL", 5: "Bagel"}
     storage = None
     while storage is None:
         print()
@@ -114,6 +114,11 @@ def get_storage_type():
         print("1. JSON (file storage, requires no database).")
         print("2. PostgreSQL (Requires a database server)")
         print("3. RedisJSON (Requires a redis server with the RedisJSON plugin)")
+        print("4. SQL (local database).")
+        print(
+            "5. Bagel (Requires an instance of the Bagel server: DO NOT USE if you don't know what this is.)"
+        )
+
         storage = input("> ")
         try:
             storage = int(storage)
@@ -169,7 +174,13 @@ def basic_setup():
 
     storage = get_storage_type()
 
-    storage_dict = {1: BackendType.JSON, 2: BackendType.POSTGRES, 3: BackendType.REDIS}
+    storage_dict = {
+        1: BackendType.JSON,
+        2: BackendType.POSTGRES,
+        3: BackendType.REDIS,
+        4: BackendType.SQL,
+        5: BackendType.Bagel,
+    }
     storage_type: BackendType = storage_dict.get(storage, BackendType.JSON)
     default_dirs["STORAGE_TYPE"] = storage_type.value
     driver_cls = drivers.get_driver_class(storage_type)
@@ -205,6 +216,10 @@ def get_target_backend(backend) -> BackendType:
         return BackendType.POSTGRES
     elif backend == "redis":
         return BackendType.REDIS
+    elif backend == "sql":
+        return BackendType.SQL
+    elif backend == "bagel":
+        return BackendType.Bagel
 
 
 async def do_migration(
@@ -397,7 +412,7 @@ def delete(
 
 @cli.command()
 @click.argument("instance", type=click.Choice(instance_list), metavar="<INSTANCE_NAME>")
-@click.argument("backend", type=click.Choice(["json", "postgres", "redis"]))
+@click.argument("backend", type=click.Choice(["json", "postgres", "redis", "sql", "bagel"]))
 def convert(instance, backend):
     """Convert data backend of an instance."""
     current_backend = get_current_backend(instance)

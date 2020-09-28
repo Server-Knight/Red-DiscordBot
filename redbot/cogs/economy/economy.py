@@ -1,9 +1,8 @@
 import calendar
 import logging
 import random
-from collections import defaultdict, deque, namedtuple
+from collections import defaultdict, deque
 from enum import Enum
-from math import ceil
 from typing import cast, Iterable, Union, Literal
 
 import discord
@@ -14,9 +13,10 @@ from redbot.core import Config, bank, commands, errors, checks
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils import AsyncIter
 from redbot.core.utils.chat_formatting import box, humanize_number
-from redbot.core.utils.menus import close_menu, menu, DEFAULT_CONTROLS
-
 from redbot.core.bot import Red
+from redbot.core.utils._dpy_menus_utils import SimpleHybridMenu
+
+from .menus import LeaderboardSource
 
 T_ = Translator("Economy", __file__)
 
@@ -475,112 +475,25 @@ class Economy(commands.Cog):
 
     @commands.command()
     @guild_only_check()
-    async def leaderboard(self, ctx: commands.Context, top: int = 10, show_global: bool = False):
-        """Print the leaderboard.
-
-        Defaults to top 10.
-        """
+    async def leaderboard(self, ctx: commands.Context, show_global: bool = False):
+        """Print the leaderboard."""
         guild = ctx.guild
-        author = ctx.author
-        embed_requested = await ctx.embed_requested()
-        footer_message = _("Page {page_num}/{page_len}.")
-        max_bal = await bank.get_max_balance(ctx.guild)
-
-        if top < 1:
-            top = 10
-
-        base_embed = discord.Embed(title=_("Economy Leaderboard"))
         if await bank.is_global() and show_global:
             # show_global is only applicable if bank is global
-            bank_sorted = await bank.get_leaderboard(positions=top, guild=None)
-            base_embed.set_author(name=ctx.bot.user.name, icon_url=ctx.bot.user.avatar_url)
+            bank_sorted = await bank.get_leaderboard(guild=None)
         else:
-            bank_sorted = await bank.get_leaderboard(positions=top, guild=guild)
-            base_embed.set_author(name=guild.name, icon_url=guild.icon_url)
-
+            bank_sorted = await bank.get_leaderboard(guild=guild)
         try:
-            bal_len = len(humanize_number(bank_sorted[0][1]["balance"]))
-            bal_len_max = len(humanize_number(max_bal))
-            if bal_len > bal_len_max:
-                bal_len = bal_len_max
+            bank_sorted[0][1]["balance"]
             # first user is the largest we'll see
         except IndexError:
             return await ctx.send(_("There are no accounts in the bank."))
-        pound_len = len(str(len(bank_sorted)))
-        header = "{pound:{pound_len}}{score:{bal_len}}{name:2}\n".format(
-            pound="#",
-            name=_("Name"),
-            score=_("Score"),
-            bal_len=bal_len + 6,
-            pound_len=pound_len + 3,
-        )
-        highscores = []
-        pos = 1
-        temp_msg = header
-        for acc in bank_sorted:
-            try:
-                name = guild.get_member(acc[0]).display_name
-            except AttributeError:
-                user_id = ""
-                if await ctx.bot.is_owner(ctx.author):
-                    user_id = f"({str(acc[0])})"
-                name = f"{acc[1]['name']} {user_id}"
 
-            balance = acc[1]["balance"]
-            if balance > max_bal:
-                balance = max_bal
-                await bank.set_balance(MOCK_MEMBER(acc[0], guild), balance)
-            balance = humanize_number(balance)
-            if acc[0] != author.id:
-                temp_msg += (
-                    f"{f'{humanize_number(pos)}.': <{pound_len+2}} "
-                    f"{balance: <{bal_len + 5}} {name}\n"
-                )
-
-            else:
-                temp_msg += (
-                    f"{f'{humanize_number(pos)}.': <{pound_len+2}} "
-                    f"{balance: <{bal_len + 5}} "
-                    f"<<{author.display_name}>>\n"
-                )
-            if pos % 10 == 0:
-                if embed_requested:
-                    embed = base_embed.copy()
-                    embed.description = box(temp_msg, lang="md")
-                    embed.set_footer(
-                        text=footer_message.format(
-                            page_num=len(highscores) + 1,
-                            page_len=ceil(len(bank_sorted) / 10),
-                        )
-                    )
-                    highscores.append(embed)
-                else:
-                    highscores.append(box(temp_msg, lang="md"))
-                temp_msg = header
-            pos += 1
-
-        if temp_msg != header:
-            if embed_requested:
-                embed = base_embed.copy()
-                embed.description = box(temp_msg, lang="md")
-                embed.set_footer(
-                    text=footer_message.format(
-                        page_num=len(highscores) + 1,
-                        page_len=ceil(len(bank_sorted) / 10),
-                    )
-                )
-                highscores.append(embed)
-            else:
-                highscores.append(box(temp_msg, lang="md"))
-
-        if highscores:
-            await menu(
-                ctx,
-                highscores,
-                DEFAULT_CONTROLS if len(highscores) > 1 else {"\N{CROSS MARK}": close_menu},
-            )
-        else:
-            await ctx.send(_("No balances found."))
+        await SimpleHybridMenu(
+            source=LeaderboardSource(bank_sorted),
+            cog=self,
+            delete_message_after=True,
+        ).start(ctx=ctx, wait=False)
 
     @commands.command()
     @guild_only_check()

@@ -78,7 +78,7 @@ log = logging.getLogger("red.core.bank")
 _data_deletion_lock = asyncio.Lock()
 
 
-async def _init(_bot):
+async def _init(bot):
     global _config, _bot
     _bot = bot
     _config = Config.get_conf(None, 384734293238749, cog_name="Bank", force_registration=True)

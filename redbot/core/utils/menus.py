@@ -5,51 +5,28 @@
 import asyncio
 import contextlib
 import functools
-from typing import Iterable, List, Union
+import logging
+from typing import Iterable, List, Optional, Union, Dict
 import discord
 
 from .. import commands
 from .predicates import ReactionPredicate
+from ..i18n import Translator
 
 _ReactableEmoji = Union[str, discord.Emoji]
+
+_ = Translator("Menus", __file__)
+
+log = logging.getLogger("red.menus")
 
 
 async def menu(
     ctx: commands.Context,
-    pages: Iterable[Union[str, discord.Embed]],
-    controls: Optional[Dict] = None,
-    message: discord.Message = None,
-    page: int = 0,
-    timeout: int = 180,
-    wait: bool = False,
-    delete_message_after: bool = True,
-    clear_reactions_after: bool = True,
-):
-    if controls == DEFAULT_CONTROLS:
-        return await dpymenu(
-            ctx=ctx,
-            pages=pages,
-            controls=None,
-            message=message,
-            page=page,
-            timeout=timeout,
-            wait=wait,
-            delete_message_after=delete_message_after,
-            clear_reactions_after=clear_reactions_after,
-        )
-    else:
-        return await _menu(
-            ctx=ctx, pages=pages, controls=controls, message=message, page=page, timeout=timeout
-        )
-
-
-async def _menu(
-    ctx: commands.Context,
     pages: Union[List[str], List[discord.Embed]],
-    controls: dict,
+    controls: Dict,
     message: discord.Message = None,
     page: int = 0,
-    timeout: float = 30.0,
+    timeout: float = 60.0,
 ):
     """
     An emoji-based menu
@@ -119,12 +96,12 @@ async def _menu(
     try:
         predicates = ReactionPredicate.with_emojis(tuple(controls.keys()), message, ctx.author)
         tasks = [
-            asyncio.ensure_future(
-                ctx.bot.wait_for('reaction_add', check=predicates)),
-            asyncio.ensure_future(
-                ctx.bot.wait_for('reaction_remove', check=predicates))
+            asyncio.ensure_future(ctx.bot.wait_for("reaction_add", check=predicates)),
+            asyncio.ensure_future(ctx.bot.wait_for("reaction_remove", check=predicates)),
         ]
-        done, pending = await asyncio.wait(tasks, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+        done, pending = await asyncio.wait(
+            tasks, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+        )
         for task in pending:
             task.cancel()
 

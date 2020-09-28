@@ -8,6 +8,7 @@ from redbot.core.drivers.log import log
 from secrets import compare_digest
 
 try:
+    # pylint: disable=import-error
     import aioredis
     from .client_interface import Client, create_redis_pool, str_path
 except ImportError:
@@ -376,12 +377,13 @@ class RedisDriver(BaseDriver):
 
     @staticmethod
     def _escape_key(key: str) -> str:
-        string = key
+        string = f"${base64.b16encode(key.encode()).decode()}"
         return string
 
     @staticmethod
     def _unescape_key(key: str) -> str:
-        return key
+        string = key[1:].encode()
+        return base64.b16decode(string).decode()
 
     @classmethod
     def _escape_dict_keys(cls, data: dict) -> dict:

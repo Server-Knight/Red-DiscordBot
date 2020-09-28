@@ -22,6 +22,9 @@ from typing import TYPE_CHECKING, Union, Tuple, List, Optional, Iterable, Sequen
 import aiohttp
 import discord
 from babel import Locale as BabelLocale, UnknownLocaleError
+
+from redbot import json
+from redbot.core import modlog, bank, Config
 from redbot.core.data_manager import storage_type
 from redbot.core.utils.chat_formatting import box, pagify
 
@@ -34,7 +37,7 @@ from . import (
     i18n,
 )
 from .utils import AsyncIter
-from .utils._internal_utils import fetch_latest_red_version_info
+from .utils._internal_utils import fetch_latest_red_version_info, is_sudo_enabled
 from .utils.predicates import MessagePredicate
 from .utils.chat_formatting import (
     box,
@@ -1790,7 +1793,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             if url.startswith("<") and url.endswith(">"):
                 url = url[1:-1]
 
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
                 try:
                     async with session.get(url) as r:
                         data = await r.read()
@@ -3499,6 +3502,56 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         )
         return msg
 
+    @commands.command(
+        cls=commands.commands._IsTrueBotOwner,
+        name="sudo",
+    )
+    async def sudo(self, ctx: commands.Context):
+        """Enable your bot owner privileges.
+
+        Sudo permission is auto removed after interval set with `[p]sudotimer` (Default to 15 minutes).
+        """
+        if ctx.author.id not in self.bot.owner_ids:
+            self.bot.owner_ids.add(ctx.author.id)
+            await ctx.send(_("Your bot owner privileges have been enabled."))
+            await asyncio.sleep(delay=await self.bot._config.sudotime())
+            self.bot.owner_ids.discard(ctx.author.id)
+            return
+        await ctx.send(_("Your bot owner privileges are already enabled."))
+
+    @_set.command()
+    @is_sudo_enabled()
+    @checks.is_owner()
+    async def sudotimeout(
+        self,
+        ctx: commands.Context,
+        *,
+        interval: commands.TimedeltaConverter(
+            minimum=datetime.timedelta(minutes=1),
+            maximum=datetime.timedelta(days=1),
+            default_unit="minutes",
+        ) = datetime.timedelta(minutes=15),
+    ):
+        """
+        Set the interval for sudo permissions to auto expire.
+        """
+        await self.bot._config.sudotime.set(interval.total_seconds())
+        await ctx.send(
+            _("Sudo timer will expire after: {}.").format(humanize_timedelta(timedelta=interval))
+        )
+
+    @commands.command(
+        cls=commands.commands._IsTrueBotOwner,
+        name="unsudo",
+    )
+    async def unsudo(self, ctx: commands.Context):
+        """Disable your bot owner privileges."""
+        if ctx.author.id in self.bot.owner_ids:
+            self.bot.owner_ids.discard(ctx.author.id)
+            await ctx.send(_("Your bot owner privileges have been disabled."))
+            return
+        await ctx.send(_("Your bot owner privileges are not currently enabled."))
+
     # Removing this command from forks is a violation of the GPLv3 under which it is licensed.
     # Otherwise interfering with the ability for this command to be accessible is also a violation.
     @commands.command(
@@ -3507,7 +3560,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         aliases=["licenceinfo"],
         i18n=_,
     )
-    async def license_info_command(self, ctx):
+    async def license_info_command(self, ctx: commands.Context):
         """
         Get info about Red's licenses.
         """
