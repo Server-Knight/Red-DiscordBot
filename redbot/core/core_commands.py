@@ -3534,7 +3534,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                 await new_ctx.command.invoke(new_ctx)
                 self.bot.owner_ids.discard(ctx.author.id)
             except Exception as err:
-                await self.bot.on_command_error(new_ctx, err)
+                await self.bot.on_command_error(new_ctx, err, unhandled_by_cog=True)
 
     @_set.command()
     @is_sudo_enabled()
