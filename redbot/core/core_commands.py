@@ -3526,8 +3526,11 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             msg = copy(ctx.message)
             msg.content = ctx.prefix + command
             new_ctx = await self.bot.get_context(msg)
-            await new_ctx.command.reinvoke(new_ctx)
-            self.bot.owner_ids.discard(ctx.author.id)
+            try:
+                await new_ctx.command.reinvoke(new_ctx)
+                self.bot.owner_ids.discard(ctx.author.id)
+            except Exception as err:
+                await self.bot.on_command_error(new_ctx, err)
 
     @_set.command()
     @is_sudo_enabled()
