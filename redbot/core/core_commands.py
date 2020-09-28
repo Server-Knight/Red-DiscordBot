@@ -3525,8 +3525,8 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         else:
             msg = copy(ctx.message)
             msg.content = ctx.prefix + command
-            new_ctx = await self.bot.get_context(msg, should_unsudo=True)
-            await ctx.command.reinvoke(new_ctx)
+            new_ctx = await self.bot.get_context(msg)
+            await new_ctx.command.reinvoke(new_ctx)
             self.bot.owner_ids.discard(ctx.author.id)
 
     @_set.command()
