@@ -1585,8 +1585,10 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         global_data = await ctx.bot._config.all()
         locale = global_data["locale"]
         regional_format = global_data["regional_format"] or _("Same as bot's locale")
+        sudotime = (
+            humanize_timedelta(seconds=global_data["sudotime"]) if ctx.bot._sudo_enabled else ""
+        )
         colour = discord.Colour(global_data["color"])
-
         prefix_string = " ".join(prefixes)
         settings = _(
             "{bot_name} Settings:\n\n"
@@ -1594,13 +1596,15 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             "{guild_settings}"
             "Locale: {locale}\n"
             "Regional format: {regional_format}\n"
-            "Default embed colour: {colour}"
+            "Default embed colour: {colour}\n"
+            "{sudotime}"
         ).format(
             bot_name=ctx.bot.user.name,
             prefixes=prefix_string,
             guild_settings=guild_settings,
             locale=locale,
             regional_format=regional_format,
+            sudotime=sudotime,
             colour=colour,
         )
         for page in pagify(settings):
