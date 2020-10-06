@@ -1,13 +1,24 @@
 import contextlib
 import importlib
 import json as stblib_json
-
+from json import JSONDecoder as JSONDecoder
+from json import JSONDecodeError as JSONDecodeError
+from json import JSONEncoder as JSONEncoder
 
 MODULES = ("orjson", "ujson")
 mainjson = None
 
 
-__all__ = ["dump", "dumps", "load", "loads", "json_module"]
+__all__ = [
+    "dump",
+    "dumps",
+    "load",
+    "loads",
+    "json_module",
+    "JSONDecoder",
+    "JSONDecodeError",
+    "JSONEncoder",
+]
 
 
 def import_modules():
