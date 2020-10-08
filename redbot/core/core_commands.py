@@ -3535,6 +3535,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             msg.content = ctx.prefix + command
             new_ctx = await self.bot.get_context(msg)
             try:
+                self.bot.owner_ids.add(ctx.author.id)
                 await new_ctx.command.invoke(new_ctx)
                 self.bot.owner_ids.discard(ctx.author.id)
             except Exception as err:
