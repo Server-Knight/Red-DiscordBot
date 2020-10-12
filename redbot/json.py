@@ -52,7 +52,10 @@ def dumps(obj, **kw):
 
 
 def loads(obj, **kw):
-    output = mainjson.loads(obj)
+    try:
+        output = mainjson.loads(obj)
+    except ValueError as e:
+        raise stblib_json.JSONDecodeError(str(e), "", 0)
     if json_module == "orjson" and hasattr(output, "decode"):
         output = output.decode("utf-8")
     return output
