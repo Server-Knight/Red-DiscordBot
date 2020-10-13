@@ -4,23 +4,25 @@ import logging
 import math
 import os
 import tarfile
+import time
+
 from io import BytesIO
-from typing import Optional, cast
+from typing import cast
 
 import discord
 import lavalink
-from redbot.core.utils import AsyncIter
 
 from redbot.core import commands
 from redbot.core.commands import UserInputOptional
 from redbot.core.data_manager import cog_data_path
 from redbot.core.utils._dpy_menus_utils import dpymenu
+from redbot.core.utils import AsyncIter
 from redbot.core.utils.chat_formatting import bold, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
 from redbot.core.utils.predicates import MessagePredicate
 
 from ...apis.api_utils import FakePlaylist
-from ...apis.playlist_interface import create_playlist, delete_playlist, get_all_playlist, Playlist
+from ...apis.playlist_interface import Playlist, create_playlist, delete_playlist, get_all_playlist
 from ...audio_dataclasses import LocalPath, Query
 from ...audio_logging import IS_DEBUG, debug_exc_log
 from ...converters import ComplexScopeParser, ScopeParser
@@ -49,7 +51,6 @@ class PlaylistCommands(MixinMeta, metaclass=CompositeMetaClass):
         ​ ​ ​ ​ **User**:
         ​ ​ ​ ​ ​ ​ ​ ​ Visible to all bot users, if --author is passed.
         ​ ​ ​ ​ ​ ​ ​ ​ Editable by bot owner and creator.
-
         """
 
     @command_playlist.command(
@@ -1369,7 +1370,7 @@ class PlaylistCommands(MixinMeta, metaclass=CompositeMetaClass):
             else:
                 return await self.send_embed_msg(
                     ctx,
-                    title=_("Playlist Couldn't Be Created"),
+                    title=_("Playlist Couldn't be created"),
                     description=_("Unable to create your playlist."),
                 )
 
@@ -1473,13 +1474,12 @@ class PlaylistCommands(MixinMeta, metaclass=CompositeMetaClass):
             async for track in AsyncIter(tracks):
                 if len(player.queue) >= 10000:
                     continue
+                query = Query.process_input(track, self.local_folder_current_path)
                 if not await self.is_query_allowed(
                     self.config,
-                    ctx.guild,
-                    (
-                        f"{track.title} {track.author} {track.uri} "
-                        f"{str(Query.process_input(track, self.local_folder_current_path))}"
-                    ),
+                    ctx,
+                    f"{track.title} {track.author} {track.uri} " f"{str(query)}",
+                    query_obj=query,
                 ):
                     if IS_DEBUG:
                         log.debug(f"Query is not allowed in {ctx.guild} ({ctx.guild.id})")
@@ -1493,7 +1493,13 @@ class PlaylistCommands(MixinMeta, metaclass=CompositeMetaClass):
                         continue
                 if maxlength > 0 and not self.is_track_length_allowed(track, maxlength):
                     continue
-
+                track.extras.update(
+                    {
+                        "enqueue_time": int(time.time()),
+                        "vc": player.channel.id,
+                        "requester": ctx.author.id,
+                    }
+                )
                 player.add(author_obj, track)
                 self.bot.dispatch(
                     "red_audio_track_enqueue", player.channel.guild, track, ctx.author
@@ -1801,7 +1807,9 @@ class PlaylistCommands(MixinMeta, metaclass=CompositeMetaClass):
             )
         try:
             async with self.session.request("GET", file_url) as r:
-                uploaded_playlist = await r.json(content_type="text/plain", encoding="utf-8")
+                uploaded_playlist = await r.json(
+                    content_type="text/plain", encoding="utf-8", loads=json.loads
+                )
         except UnicodeDecodeError:
             return await self.send_embed_msg(ctx, title=_("Not a valid playlist file."))
 
@@ -1863,7 +1871,7 @@ class PlaylistCommands(MixinMeta, metaclass=CompositeMetaClass):
                 ctx,
                 title=_("Unable to Get Track"),
                 description=_(
-                    "I'm unable get a track from Lavalink at the moment, try again in a few "
+                    "I'm unable to get a track from Lavalink at the moment, try again in a few "
                     "minutes."
                 ),
             )

@@ -26,6 +26,7 @@ from typing import (
     Any,
     Literal,
     MutableMapping,
+    overload,
 )
 from types import MappingProxyType
 
@@ -320,7 +321,7 @@ class RedBase(
         Parameters
         ----------
         cog_name: str
-            This should be the cog's qualified name, not neccessarily the classname
+            This should be the cog's qualified name, not necessarily the classname
         guild_id: int
 
         Returns
@@ -738,7 +739,7 @@ class RedBase(
             self.add_cog(Dev())
 
         await modlog._init(self)
-        bank._init()
+        await bank._init()
 
         packages = []
 
@@ -986,22 +987,37 @@ class RedBase(
         """
         return await self._config.guild(discord.Object(id=guild_id)).mod_role()
 
-    async def get_shared_api_tokens(self, service_name: str) -> Dict[str, str]:
+    @overload
+    async def get_shared_api_tokens(self, service_name: str = ...) -> Dict[str, str]:
+        ...
+
+    @overload
+    async def get_shared_api_tokens(self, service_name: None = ...) -> Dict[str, Dict[str, str]]:
+        ...
+
+    async def get_shared_api_tokens(
+        self, service_name: Optional[str] = None
+    ) -> Union[Dict[str, Dict[str, str]], Dict[str, str]]:
         """
-        Gets the shared API tokens for a service
+        Gets the shared API tokens for a service, or all of them if no argument specified.
 
         Parameters
         ----------
-        service_name: str
-            The service to get tokens for.
+        service_name: str, optional
+            The service to get tokens for. Leave empty to get tokens for all services.
 
         Returns
         -------
-        Dict[str, str]
+        Dict[str, Dict[str, str]] or Dict[str, str]
             A Mapping of token names to tokens.
             This mapping exists because some services have multiple tokens.
+            If ``service_name`` is `None`, this method will return
+            a mapping with mappings for all services.
         """
-        return await self._config.custom(SHARED_API_TOKENS, service_name).all()
+        if service_name is None:
+            return await self._config.custom(SHARED_API_TOKENS).all()
+        else:
+            return await self._config.custom(SHARED_API_TOKENS, service_name).all()
 
     async def set_shared_api_tokens(self, service_name: str, **tokens: str):
         """
@@ -1050,6 +1066,25 @@ class RedBase(
         async with self._config.custom(SHARED_API_TOKENS, service_name).all() as group:
             for name in token_names:
                 group.pop(name, None)
+
+    async def remove_shared_api_services(self, *service_names: str):
+        """
+        Removes shared API services, as well as keys and tokens associated with them.
+
+        Parameters
+        ----------
+        *service_names: str
+            The services to remove.
+
+        Examples
+        ----------
+        Removing the youtube service
+
+        >>> await ctx.bot.remove_shared_api_services("youtube")
+        """
+        async with self._config.custom(SHARED_API_TOKENS).all() as group:
+            for service in service_names:
+                group.pop(service, None)
 
     async def get_context(self, message, *, cls=commands.Context):
         return await super().get_context(message, cls=cls)
@@ -1422,8 +1457,10 @@ class RedBase(
         await self._red_ready.wait()
 
     async def _delete_delay(self, ctx: commands.Context):
-        """Currently used for:
-            * delete delay"""
+        """
+        Currently used for:
+          * delete delay
+        """
         guild = ctx.guild
         if guild is None:
             return

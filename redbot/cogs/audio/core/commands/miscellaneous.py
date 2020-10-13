@@ -6,10 +6,10 @@ import random
 
 import discord
 import lavalink
-from redbot.core.utils import AsyncIter
 
 from redbot.core import commands
 from redbot.core.utils._dpy_menus_utils import dpymenu
+from redbot.core.utils import AsyncIter
 from redbot.core.utils.chat_formatting import humanize_number, pagify
 from redbot.core.utils.menus import DEFAULT_CONTROLS, menu
 
@@ -53,7 +53,7 @@ class MiscellaneousCommands(MixinMeta, metaclass=CompositeMetaClass):
             try:
                 if not p.current:
                     raise AttributeError
-                current_title = self.get_track_description(
+                current_title = await self.get_track_description(
                     p.current, self.local_folder_current_path
                 )
                 msg += "{} [`{}`]: {}\n".format(p.channel.guild.name, connect_dur, current_title)

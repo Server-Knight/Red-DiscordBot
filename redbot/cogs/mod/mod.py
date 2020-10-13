@@ -49,7 +49,7 @@ class Mod(
     default_global_settings = {"version": ""}
 
     default_guild_settings = {
-        "mention_spam": {"ban": None, "kick": None, "warn": None},
+        "mention_spam": {"ban": None, "kick": None, "warn": None, "strict": False},
         "delete_repeats": -1,
         "ignored": False,
         "respect_hierarchy": True,
@@ -194,7 +194,7 @@ class Mod(
     @commands.is_owner()
     async def movedeletedelay(self, ctx: commands.Context) -> None:
         """
-            Move deletedelay settings to core
+        Move deletedelay settings to core
         """
         all_guilds = await self.config.all_guilds()
         for guild_id, settings in all_guilds.items():
