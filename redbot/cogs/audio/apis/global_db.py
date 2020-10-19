@@ -1,6 +1,5 @@
 import asyncio
 import contextlib
-import json
 import logging
 
 from copy import copy
@@ -10,6 +9,7 @@ from typing import TYPE_CHECKING, Mapping, Optional, Union
 import aiohttp
 from lavalink.rest_api import LoadResult
 
+from redbot import json
 from redbot.core import Config
 from redbot.core.bot import Red
 from redbot.core.commands import Cog
@@ -168,7 +168,6 @@ class GlobalCacheWrapper:
         global_api_user = copy(self.cog.global_api_user)
         await self._get_api_key()
         is_enabled = await self.config.global_db_enabled()
-        await self._get_api_key()
         if (not is_enabled) or self.api_key is None:
             return global_api_user
         with contextlib.suppress(Exception):

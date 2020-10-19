@@ -1,6 +1,5 @@
 import base64
 import contextlib
-import json
 import logging
 import time
 from pathlib import Path

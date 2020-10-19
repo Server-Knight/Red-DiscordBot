@@ -1,7 +1,6 @@
 import asyncio
 import asyncio.subprocess  # disables for # https://github.com/PyCQA/pylint/issues/1469
 import itertools
-import json
 import logging
 import pathlib
 import platform
