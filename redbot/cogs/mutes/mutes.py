@@ -37,6 +37,9 @@ MUTE_UNMUTE_ISSUES = {
     "left_guild": _("The user has left the server while applying an overwrite."),
     "unknown_channel": _("The channel I tried to mute the user in isn't found."),
     "role_missing": _("The mute role no longer exists."),
+    "voice_mute_permission": _(
+        "Because I don't have the Move Members permission, this will take into effect when the user rejoins."
+    ),
 }
 _ = T_
 
@@ -56,7 +59,7 @@ class CompositeMetaClass(type(commands.Cog), type(ABC)):
 
 class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
     """
-    Mute users temporarily or indefinitely
+    Mute users temporarily or indefinitely.
     """
 
     def __init__(self, bot: Red):
@@ -345,6 +348,8 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
         """
         This handles manually removing overwrites for a user that has been muted
         """
+        if await self.bot.cog_disabled_in_guild(self, after.guild):
+            return
         if after.id in self._channel_mutes:
             before_perms: Dict[int, Dict[str, Optional[bool]]] = {
                 o.id: {name: attr for name, attr in p} for o, p in before.overwrites.items()
@@ -384,6 +389,8 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         guild = member.guild
+        if await self.bot.cog_disabled_in_guild(self, guild):
+            return
         mute_role = await self.config.guild(guild).mute_role()
         if not mute_role:
             return
@@ -404,13 +411,24 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
         pass
 
     @muteset.command(name="notification")
-    @checks.mod_or_permissions(manage_messages=True)
-    async def notification_channel_set(self, ctx: commands.Context, channel: discord.TextChannel):
-        """Set The notification channel for automatic unmute issues."""
-        await self.config.guild(ctx.guild).notification_channel.set(channel.id)
-        await ctx.send(
-            _("I will post unmute issues in {channel}.").format(channel=channel.mention)
-        )
+    @checks.admin_or_permissions(manage_channels=True)
+    async def notification_channel_set(
+        self, ctx: commands.Context, channel: Optional[discord.TextChannel] = None
+    ):
+        """
+        Set the notification channel for automatic unmute issues.
+
+        If no channel is provided this will be cleared and notifications
+        about issues when unmuting users will not be sent anywhere.
+        """
+        if channel is None:
+            await self.config.guild(ctx.guild).notification_channel.clear()
+            await ctx.send(_("Notification channel for unmute issues has been cleard."))
+        else:
+            await self.config.guild(ctx.guild).notification_channel.set(channel.id)
+            await ctx.send(
+                _("I will post unmute issues in {channel}.").format(channel=channel.mention)
+            )
 
     @muteset.command(name="role")
     @checks.admin_or_permissions(manage_roles=True)
@@ -947,6 +965,7 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
             guild = ctx.guild
             audit_reason = get_audit_reason(author, reason)
             success_list = []
+            issue_list = []
             for user in users:
                 success = await self.channel_unmute_user(
                     guild, channel, author, user, audit_reason
@@ -966,9 +985,9 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
                         channel=channel,
                     )
                 else:
-                    return await ctx.send(success["reason"])
+                    issue_list.append((user, success["reason"]))
             if success_list:
-                if self._channel_mutes[channel.id]:
+                if channel.id in self._channel_mutes and self._channel_mutes[channel.id]:
                     await self.config.channel(channel).muted_users.set(
                         self._channel_mutes[channel.id]
                     )
@@ -979,6 +998,11 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
                         users=humanize_list([f"{u}" for u in success_list])
                     )
                 )
+            if issue_list:
+                message = _(
+                    "{users} could not be unmuted in this channels. " "Would you like to see why?"
+                ).format(users=humanize_list([f"{u}" for u, x in issue_list]))
+                await self.handle_issues(ctx, message, humanize_list(x for u, x in issue_list))
 
     async def mute_user(
         self,
@@ -1014,9 +1038,9 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
                 await user.add_roles(role, reason=reason)
                 await self.config.guild(guild).muted_users.set(self._server_mutes[guild.id])
             except discord.errors.Forbidden:
-                del self._server_mutes[guild.id][
-                    user.id
-                ]  # this is here so we don't have a bad cache
+                if guild.id in self._server_mutes and user.id in self._server_mutes[guild.id]:
+                    del self._server_mutes[guild.id][user.id]
+                    # this is here so we don't have a bad cache
                 return False, _(MUTE_UNMUTE_ISSUES["permissions_issue"])
             return True, None
         else:
@@ -1110,10 +1134,14 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
             }
 
         new_overs: dict = {}
-        if not isinstance(channel, discord.TextChannel):
-            new_overs.update(speak=False)
-        if not isinstance(channel, discord.VoiceChannel):
-            new_overs.update(send_messages=False, add_reactions=False)
+        move_channel = False
+        new_overs.update(send_messages=False, add_reactions=False, speak=False)
+        send_reason = None
+        if user.voice and user.voice.channel:
+            if channel.permissions_for(guild.me).move_members:
+                move_channel = True
+            else:
+                send_reason = _(MUTE_UNMUTE_ISSUES["voice_mute_permission"])
 
         if not await self.is_allowed_by_hierarchy(guild, author, user):
             return {
@@ -1124,17 +1152,18 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
 
         old_overs = {k: getattr(overwrites, k) for k in new_overs}
         overwrites.update(**new_overs)
-        try:
-            if channel.id not in self._channel_mutes:
-                self._channel_mutes[channel.id] = {}
+        if channel.id not in self._channel_mutes:
+            self._channel_mutes[channel.id] = {}
             self._channel_mutes[channel.id][user.id] = {
                 "author": author.id,
                 "member": user.id,
                 "until": until.timestamp() if until else None,
             }
+        try:
             await channel.set_permissions(user, overwrite=overwrites, reason=reason)
         except discord.Forbidden:
-            del self._channel_mutes[channel.id][user.id]
+            if channel.id in self._channel_mutes and user.id in self._channel_mutes[channel.id]:
+                del self._channel_mutes[channel.id][user.id]
             return {
                 "success": False,
                 "channel": channel,
@@ -1142,20 +1171,40 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
             }
         except discord.NotFound as e:
             if e.code == 10003:
-                del self._channel_mutes[channel.id][user.id]
+                if (
+                    channel.id in self._channel_mutes
+                    and user.id in self._channel_mutes[channel.id]
+                ):
+                    del self._channel_mutes[channel.id][user.id]
                 return {
                     "success": False,
                     "channel": channel,
                     "reason": _(MUTE_UNMUTE_ISSUES["unknown_channel"]),
                 }
             elif e.code == 10009:
-                del self._channel_mutes[channel.id][user.id]
+                if (
+                    channel.id in self._channel_mutes
+                    and user.id in self._channel_mutes[channel.id]
+                ):
+                    del self._channel_mutes[channel.id][user.id]
                 return {
                     "success": False,
                     "channel": channel,
                     "reason": _(MUTE_UNMUTE_ISSUES["left_guild"]),
                 }
-        return {"success": True, "channel": channel, "old_overs": old_overs}
+        if move_channel:
+            try:
+                await user.move_to(channel)
+            except discord.HTTPException:
+                # catch all discord errors because the result will be the same
+                # we successfully muted by this point but can't move the user
+                return {
+                    "success": True,
+                    "channel": channel,
+                    "reason": _(MUTE_UNMUTE_ISSUES["voice_mute_permission"]),
+                    "old_overs": old_overs,
+                }
+        return {"success": True, "channel": channel, "old_overs": old_overs, "reason": send_reason}
 
     async def channel_unmute_user(
         self,
@@ -1169,11 +1218,16 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
         overwrites = channel.overwrites_for(user)
         perms_cache = await self.config.member(user).perms_cache()
 
+        move_channel = False
         _temp = None  # used to keep the cache incase we have permissions issues
         if channel.id in perms_cache:
             old_values = perms_cache[channel.id]
         else:
             old_values = {"send_messages": None, "add_reactions": None, "speak": None}
+
+        if user.voice and user.voice.channel:
+            if channel.permissions_for(guild.me).move_members:
+                move_channel = True
 
         if not await self.is_allowed_by_hierarchy(guild, author, user):
             return {
@@ -1217,5 +1271,16 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
                     "success": False,
                     "channel": channel,
                     "reason": _(MUTE_UNMUTE_ISSUES["left_guild"]),
+                }
+        if move_channel:
+            try:
+                await user.move_to(channel)
+            except discord.HTTPException:
+                # catch all discord errors because the result will be the same
+                # we successfully muted by this point but can't move the user
+                return {
+                    "success": True,
+                    "channel": channel,
+                    "reason": _(MUTE_UNMUTE_ISSUES["voice_mute_permission"]),
                 }
         return {"success": True, "channel": channel, "reason": None}
