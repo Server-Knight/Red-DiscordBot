@@ -109,6 +109,8 @@ async def menu(
             raise asyncio.TimeoutError()
         react, user = done.pop().result()
     except asyncio.TimeoutError:
+        if not ctx.me:
+            return
         try:
             if message.channel.permissions_for(ctx.me).manage_messages:
                 await message.clear_reactions()
