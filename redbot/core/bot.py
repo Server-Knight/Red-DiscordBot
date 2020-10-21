@@ -7,13 +7,13 @@ import shutil
 import sys
 import contextlib
 import weakref
-import functools
 from collections import namedtuple
 from datetime import datetime
 from enum import IntEnum
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import (
+    Iterable,
     Optional,
     Union,
     List,
@@ -453,7 +453,7 @@ class RedBase(
         )
 
     @counter.deleter
-    def counter(self, value) -> NoReturn:
+    def counter(self) -> NoReturn:
         raise RuntimeError(
             "Please don't try to delete the counter attribute as other cogs may depend on it."
         )
@@ -574,6 +574,234 @@ class RedBase(
                     return False
 
         return True
+
+    async def add_to_blocklist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Adds users and roles to the blocklist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be added to the blocklist.
+        guild : Optional[discord.Guild]
+           The guild to add the entries to. If ``None`` then add to the global blocklist
+
+        Raises
+        ------
+        TypeError
+            Did not provide valid``who_or_what``
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been added to the blocklist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.add_to_blacklist(guild, uids)
+        return uids
+
+    async def add_to_allowlist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Adds users and roles to the allowlist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be added to the allowlist.
+        guild : Optional[discord.Guild]
+           The guild to add the entries to. If ``None`` then add to the global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what`` is not a list of integers
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been added to the allowlist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.add_to_whitelist(guild, uids)
+        return uids
+
+    async def add_to_blocklist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Adds users and roles to the blocklist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of role and user ids to be added to the blocklist.
+        guild_id : Optional[int]
+           The guild to add the entries to. If ``None`` then add to the global blocklist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been added to the blocklist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.add_to_blacklist(guild_id, who_or_what_ids)
+        return who_or_what_ids
+
+    async def add_to_allowlist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Adds users and roles to the allowlist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of discord roles and users to be added to the allowlist.
+        guild_id : Optional[int]
+           The guild to add the entries to. If ``None`` then add to the global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been added to the allowlist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.add_to_whitelist(guild_id, who_or_what_ids)
+        return who_or_what_ids
+
+    async def remove_from_blocklist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Remove users and roles from the blocklist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be removed from the blocklist.
+        guild : Optional[discord.Guild]
+           The guild to remove the entries from. If ``None`` then remove from the global blocklist
+
+        Raises
+        ------
+        TypeError
+            Did not provide valid``who_or_what``
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been removed from the blocklist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.remove_from_blacklist(guild, uids)
+        return uids
+
+    async def remove_from_allowlist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Remove users and roles from the allowlist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be removed from the allowlist.
+        guild : Optional[discord.Guild]
+           The guild to remove the entries from. If ``None`` then remove from global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what`` is not a list of integers
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been removed from the allowlist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.remove_from_whitelist(guild, uids)
+        return uids
+
+    async def remove_from_blocklist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Remove users and roles from the blocklist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of role and user ids to be removed from the blocklist.
+        guild_id : Optional[int]
+           The guild to remove the entries from. If ``None`` then remove from the global blocklist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been removed from the blocklist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.remove_from_blacklist(guild_id, who_or_what_ids)
+        return who_or_what_ids
+
+    async def remove_from_allowlist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Remove users and roles from the allowlist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of discord roles and users to be removed from the allowlist.
+        guild_id : Optional[int]
+           The guild to remove the entries from. If ``None`` then remove from global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been removed from the allowlist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.remove_from_whitelist(guild_id, who_or_what_ids)
+        return who_or_what_ids
 
     async def message_eligible_as_command(self, message: discord.Message) -> bool:
         """
@@ -716,6 +944,62 @@ class RedBase(
             return guild.me.color
 
         return self._color
+
+    async def get_or_fetch_channel(
+        self, channel_id: int
+    ) -> Union[discord.abc.GuildChannel, discord.abc.PrivateChannel]:
+        """
+        Retrieves a discord.abc.GuildChannel or discord.abc.PrivateChannel with the specified ID.
+
+        .. warning::
+
+           This method may make an API call if the channel is not found in the bot cache. For general usage, consider ``bot.get_channel`` instead.
+
+        Raises
+        -------
+        Errors
+            Please refer to `discord.Client.fetch_channel`.
+
+        Returns
+        --------
+        Union[discord.abc.GuildChannel, discord.abc.PrivateChannel]
+           The channel from the ID.
+        """
+        if (channel := self.get_channel(channel_id)) is not None:
+            return channel
+        return await self.fetch_channel(channel_id)
+
+    async def get_or_fetch_user(self, user_id: int) -> discord.User:
+        """
+        Retrieves a discord.User based on their ID. This can only
+        be used by bot accounts. You do not have to share any guilds
+        with the user to get this information, however many operations
+        do require that you do.
+
+        .. warning::
+
+            This method may make an API call if the user is not found in the bot cache. For general usage, consider ``bot.get_user`` instead.
+
+        Parameters
+        -----------
+        user_id: int
+            The user's ID to fetch from.
+
+        Raises
+        -------
+        Errors
+            Please refer to `discord.Client.fetch_user`.
+
+
+        Returns
+        --------
+        discord.User
+            The user you requested.
+        """
+
+        if (user := self.get_user(user_id)) is not None:
+            return user
+        return await self.fetch_user(user_id)
 
     get_embed_colour = get_embed_color
 

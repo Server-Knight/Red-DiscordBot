@@ -32,7 +32,6 @@ class LavalinkEvents(MixinMeta, metaclass=CompositeMetaClass):
         if not guild:
             return
         await set_contextual_locales_from_guild(self.bot, guild)
-
         current_requester = self.rgetattr(current_track, "requester", None)
         current_stream = self.rgetattr(current_track, "is_stream", None)
         current_length = self.rgetattr(current_track, "length", None)
