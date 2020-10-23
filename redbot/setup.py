@@ -105,13 +105,15 @@ def get_data_dir(instance_name: str):
 
 
 def get_storage_type():
-    storage_dict = {1: "JSON", 2: "PostgreSQL"}
+    storage_dict = {1: "JSON", 2: "PostgreSQL", 3: "SQL"}
     storage = None
     while storage is None:
         print()
         print("Please choose your storage backend (if you're unsure, just choose 1).")
         print("1. JSON (file storage, requires no database).")
         print("2. PostgreSQL (Requires a database server)")
+        print("3. SQL (local database).")
+
         storage = input("> ")
         try:
             storage = int(storage)
@@ -167,7 +169,7 @@ def basic_setup():
 
     storage = get_storage_type()
 
-    storage_dict = {1: BackendType.JSON, 2: BackendType.POSTGRES}
+    storage_dict = {1: BackendType.JSON, 2: BackendType.POSTGRES, 3: BackendType.SQL}
     storage_type: BackendType = storage_dict.get(storage, BackendType.JSON)
     default_dirs["STORAGE_TYPE"] = storage_type.value
     driver_cls = drivers.get_driver_class(storage_type)
@@ -201,6 +203,8 @@ def get_target_backend(backend) -> BackendType:
         return BackendType.JSON
     elif backend == "postgres":
         return BackendType.POSTGRES
+    elif backend == "sql":
+        return BackendType.SQL
 
 
 async def do_migration(
@@ -387,7 +391,7 @@ def delete(
 
 @cli.command()
 @click.argument("instance", type=click.Choice(instance_list), metavar="<INSTANCE_NAME>")
-@click.argument("backend", type=click.Choice(["json", "postgres"]))
+@click.argument("backend", type=click.Choice(["json", "postgres", "sql"]))
 def convert(instance, backend):
     """Convert data backend of an instance."""
     current_backend = get_current_backend(instance)
@@ -406,7 +410,9 @@ def convert(instance, backend):
         default_dirs["STORAGE_TYPE"] = target.value
         default_dirs["STORAGE_DETAILS"] = new_storage_details
         save_config(instance, default_dirs)
-        conversion_log.info(f"Conversion to {target} complete.")
+        conversion_log.info(
+            f"Instance '{instance}' has been converted from {current_backend} to {target}."
+        )
     else:
         conversion_log.info(
             f"Cannot convert {current_backend.value} to {target.value} at this time."
