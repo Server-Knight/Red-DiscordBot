@@ -7,13 +7,13 @@ import shutil
 import sys
 import contextlib
 import weakref
-import functools
 from collections import namedtuple
 from datetime import datetime
 from enum import IntEnum
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import (
+    Iterable,
     Optional,
     Union,
     List,
@@ -41,17 +41,16 @@ from .data_manager import cog_data_path
 from .dev_commands import Dev
 from .events import init_events
 from .global_checks import init_global_checks
-
 from .settings_caches import (
     PrefixManager,
     IgnoreManager,
     WhitelistBlacklistManager,
     DisabledCogCache,
+    I18nManager,
 )
-
 from .rpc import RPCMixin
 from .utils import common_filters, AsyncIter
-from .utils._internal_utils import send_to_owners_with_prefix_replaced
+from .utils._internal_utils import send_to_owners_with_prefix_replaced, ProxyCounter
 
 CUSTOM_GROUPS = "CUSTOM_GROUPS"
 SHARED_API_TOKENS = "SHARED_API_TOKENS"
@@ -91,6 +90,37 @@ class RedBase(
         self._config = Config.get_core_conf(force_registration=False)
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
+        self._counter = ProxyCounter()
+        self._counter._register_core_counters_raw(
+            "Red_Core",
+            "on_connect",
+            "on_ready",
+            "on_command_completion",
+            "on_command_error",
+            "on_command_error_command_invoke_error",
+            "on_command_error_bot_missing_permissions",
+            "on_message",
+            "on_command_add",
+            "on_guild_join",
+            "on_guild_available",
+            "on_guild_remove",
+            "on_cog_add",
+            "on_message_without_command",
+            "on_modlog_case_edit",
+            "on_modlog_case_create",
+            "on_trivia_end",
+            "on_raw_reaction_add",
+            "on_user_update",
+            "on_member_update",
+            "on_member_join",
+            "on_message_edit",
+            "on_message_dm",
+            "on_voice_state_update",
+            "on_red_audio_queue_end",
+            "on_red_audio_track_start",
+            "on_red_audio_track_end",
+            "on_filter_message_delete",
+        )
         self._last_exception = None
         self._config.register_global(
             token=None,
@@ -142,6 +172,8 @@ class RedBase(
             disabled_commands=[],
             autoimmune_ids=[],
             delete_delay=-1,
+            locale=None,
+            regional_format=None,
         )
 
         self._config.register_channel(embeds=None, ignored=False)
@@ -159,6 +191,7 @@ class RedBase(
         self._disabled_cog_cache = DisabledCogCache(self._config)
         self._ignored_cache = IgnoreManager(self._config)
         self._whiteblacklist_cache = WhitelistBlacklistManager(self._config)
+        self._i18n_cache = I18nManager(self._config)
 
         async def prefix_manager(bot, message) -> List[str]:
             prefixes = await self._prefix_cache.get_prefixes(message.guild)
@@ -171,6 +204,12 @@ class RedBase(
 
         if "owner_id" in kwargs:
             raise RuntimeError("Red doesn't accept owner_id kwarg, use owner_ids instead.")
+
+        if "intents" not in kwargs:
+            intents = discord.Intents.all()
+            for intent_name in cli_flags.disable_intent:
+                setattr(intents, intent_name, False)
+            kwargs["intents"] = intents
 
         self._owner_id_overwrite = cli_flags.owner
 
@@ -395,9 +434,19 @@ class RedBase(
         )
 
     @property
+    def counter(self) -> ProxyCounter:
+        return self._counter
+
+    @counter.setter
+    def counter(self, value) -> NoReturn:
+        raise RuntimeError(
+            "Please don't try to replace the counter attribute as other cogs may depend on it."
+        )
+
+    @counter.deleter
     def counter(self) -> NoReturn:
-        raise AttributeError(
-            "Please make your own counter object by importing ``Counter`` from ``collections``."
+        raise RuntimeError(
+            "Please don't try to delete the counter attribute as other cogs may depend on it."
         )
 
     @property
@@ -516,6 +565,234 @@ class RedBase(
                     return False
 
         return True
+
+    async def add_to_blocklist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Adds users and roles to the blocklist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be added to the blocklist.
+        guild : Optional[discord.Guild]
+           The guild to add the entries to. If ``None`` then add to the global blocklist
+
+        Raises
+        ------
+        TypeError
+            Did not provide valid``who_or_what``
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been added to the blocklist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.add_to_blacklist(guild, uids)
+        return uids
+
+    async def add_to_allowlist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Adds users and roles to the allowlist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be added to the allowlist.
+        guild : Optional[discord.Guild]
+           The guild to add the entries to. If ``None`` then add to the global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what`` is not a list of integers
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been added to the allowlist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.add_to_whitelist(guild, uids)
+        return uids
+
+    async def add_to_blocklist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Adds users and roles to the blocklist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of role and user ids to be added to the blocklist.
+        guild_id : Optional[int]
+           The guild to add the entries to. If ``None`` then add to the global blocklist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been added to the blocklist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.add_to_blacklist(guild_id, who_or_what_ids)
+        return who_or_what_ids
+
+    async def add_to_allowlist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Adds users and roles to the allowlist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of discord roles and users to be added to the allowlist.
+        guild_id : Optional[int]
+           The guild to add the entries to. If ``None`` then add to the global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been added to the allowlist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.add_to_whitelist(guild_id, who_or_what_ids)
+        return who_or_what_ids
+
+    async def remove_from_blocklist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Remove users and roles from the blocklist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be removed from the blocklist.
+        guild : Optional[discord.Guild]
+           The guild to remove the entries from. If ``None`` then remove from the global blocklist
+
+        Raises
+        ------
+        TypeError
+            Did not provide valid``who_or_what``
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been removed from the blocklist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.remove_from_blacklist(guild, uids)
+        return uids
+
+    async def remove_from_allowlist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Remove users and roles from the allowlist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be removed from the allowlist.
+        guild : Optional[discord.Guild]
+           The guild to remove the entries from. If ``None`` then remove from global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what`` is not a list of integers
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been removed from the allowlist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.remove_from_whitelist(guild, uids)
+        return uids
+
+    async def remove_from_blocklist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Remove users and roles from the blocklist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of role and user ids to be removed from the blocklist.
+        guild_id : Optional[int]
+           The guild to remove the entries from. If ``None`` then remove from the global blocklist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been removed from the blocklist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.remove_from_blacklist(guild_id, who_or_what_ids)
+        return who_or_what_ids
+
+    async def remove_from_allowlist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Remove users and roles from the allowlist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of discord roles and users to be removed from the allowlist.
+        guild_id : Optional[int]
+           The guild to remove the entries from. If ``None`` then remove from global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been removed from the allowlist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.remove_from_whitelist(guild_id, who_or_what_ids)
+        return who_or_what_ids
 
     async def message_eligible_as_command(self, message: discord.Message) -> bool:
         """
@@ -658,6 +935,62 @@ class RedBase(
             return guild.me.color
 
         return self._color
+
+    async def get_or_fetch_channel(
+        self, channel_id: int
+    ) -> Union[discord.abc.GuildChannel, discord.abc.PrivateChannel]:
+        """
+        Retrieves a discord.abc.GuildChannel or discord.abc.PrivateChannel with the specified ID.
+
+        .. warning::
+
+           This method may make an API call if the channel is not found in the bot cache. For general usage, consider ``bot.get_channel`` instead.
+
+        Raises
+        -------
+        Errors
+            Please refer to `discord.Client.fetch_channel`.
+
+        Returns
+        --------
+        Union[discord.abc.GuildChannel, discord.abc.PrivateChannel]
+           The channel from the ID.
+        """
+        if (channel := self.get_channel(channel_id)) is not None:
+            return channel
+        return await self.fetch_channel(channel_id)
+
+    async def get_or_fetch_user(self, user_id: int) -> discord.User:
+        """
+        Retrieves a discord.User based on their ID. This can only
+        be used by bot accounts. You do not have to share any guilds
+        with the user to get this information, however many operations
+        do require that you do.
+
+        .. warning::
+
+            This method may make an API call if the user is not found in the bot cache. For general usage, consider ``bot.get_user`` instead.
+
+        Parameters
+        -----------
+        user_id: int
+            The user's ID to fetch from.
+
+        Raises
+        -------
+        Errors
+            Please refer to `discord.Client.fetch_user`.
+
+
+        Returns
+        --------
+        discord.User
+            The user you requested.
+        """
+
+        if (user := self.get_user(user_id)) is not None:
+            return user
+        return await self.fetch_user(user_id)
 
     get_embed_colour = get_embed_color
 
@@ -1104,6 +1437,7 @@ class RedBase(
             ctx = None
 
         if ctx is None or ctx.valid is False:
+            self.counter._inc_core_raw("Red_Core", "on_message_without_command")
             self.dispatch("message_without_command", message)
 
     @staticmethod

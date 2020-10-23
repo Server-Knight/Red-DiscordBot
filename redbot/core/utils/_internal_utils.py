@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import collections.abc
+import copy
 import json
 import logging
 import math
@@ -16,17 +17,21 @@ from typing import (
     AsyncIterator,
     Awaitable,
     Callable,
+    Dict,
     Iterator,
     List,
+    NoReturn,
     Optional,
     Union,
     TYPE_CHECKING,
     Tuple,
+    final,
 )
 
 import aiohttp
 import discord
 import pkg_resources
+from discord.ext.commands import Cog
 from fuzzywuzzy import fuzz, process
 from redbot import VersionInfo
 
@@ -345,3 +350,238 @@ def _is_unsafe_on_strict_config(data: Any) -> bool:
     if _type is float:
         if math.isnan(data) or math.isinf(data):
             return True
+
+
+@final
+class ProxyCounter:
+    __slots__ = ("__counters",)
+
+    def __init__(self):
+        self.__counters: Dict[str, Dict[str, int]] = {}
+
+    def register_counters(self, cog: Cog, *counters: str) -> None:
+        self.register_counters_raw(cog.qualified_name, *counters)
+
+    def register_counters_raw(self, cog_qualified_name: str, *counters: str) -> None:
+        if not type(cog_qualified_name) is str:
+            raise TypeError(
+                f"Expected cog_qualified_name to be a string, received {cog_qualified_name.__class__.__name__} instead."
+            )
+        if not all(type(counter) is str for counter in counters):
+            raise TypeError("Expected counter to be a string.")
+        if cog_qualified_name.lower().startswith("red_"):
+            raise RuntimeError("You cannot add counters to the 'red_' namespace.")
+        if cog_qualified_name not in self.__counters:
+            self.__counters[cog_qualified_name] = {}
+        for counter in counters:
+            counter = str(counter)
+            if counter not in self.__counters[cog_qualified_name]:
+                self.__counters[cog_qualified_name][counter] = 0
+
+    def _register_core_counters_raw(self, cog_qualified_name: str, *counters: str):
+        if not type(cog_qualified_name) is str:
+            raise TypeError(
+                f"Expected cog_qualified_name to be a string, received {cog_qualified_name.__class__.__name__} instead."
+            )
+        if not all(type(counter) is str for counter in counters):
+            raise TypeError("Expected counter to be a string.")
+        if not cog_qualified_name.lower().startswith("red_"):
+            raise RuntimeError(
+                "This private method should only be used to register cogs to the 'red_'."
+            )
+        if cog_qualified_name not in self.__counters:
+            self.__counters[cog_qualified_name] = {}
+        for counter in counters:
+            counter = str(counter)
+            if counter not in self.__counters[cog_qualified_name]:
+                self.__counters[cog_qualified_name][counter] = 0
+
+    def unregister_counter(self, cog: Cog, counter: str) -> None:
+        self.unregister_counter_raw(cog.qualified_name, counter)
+
+    def unregister_counter_raw(self, cog_qualified_name: str, counter: str) -> None:
+        if not type(cog_qualified_name) is str:
+            raise TypeError(
+                f"Expected cog_qualified_name to be a string, received {cog_qualified_name.__class__.__name__} instead."
+            )
+        if not type(counter) is str:
+            raise TypeError(
+                f"Expected counter to be a string, received {counter.__class__.__name__} instead."
+            )
+        if not self.__contains__((cog_qualified_name, counter)):
+            raise KeyError(f"'{counter}' hasn't been registered under '{cog_qualified_name}'.")
+        if cog_qualified_name.lower().startswith("red_"):
+            raise RuntimeError("You cannot removed counters added to the 'red_' namespace.")
+        del self.__counters[cog_qualified_name][counter]
+
+    def get(self, cog: Cog, counter: str) -> int:
+        return self.get_raw(cog.qualified_name, counter)
+
+    def get_raw(self, cog_qualified_name: str, counter: str) -> int:
+        return self.__getitem__(
+            (
+                cog_qualified_name,
+                counter,
+            )
+        )
+
+    def inc(self, cog: Cog, counter: str, by: int = 1) -> int:
+        return self.inc_raw(cog.qualified_name, counter, by=by)
+
+    def inc_raw(self, cog_qualified_name: str, counter: str, by: int = 1) -> int:
+        if not type(cog_qualified_name) is str:
+            raise TypeError(
+                f"Expected cog_qualified_name to be a string, received {cog_qualified_name.__class__.__name__} instead."
+            )
+        if not type(counter) is str:
+            raise TypeError(
+                f"Expected counter to be a string, received {counter.__class__.__name__} instead."
+            )
+        if not self.__contains__((cog_qualified_name, counter)):
+            raise KeyError(f"'{counter}' hasn't been registered under '{cog_qualified_name}'.")
+        if cog_qualified_name.lower().startswith("red_"):
+            raise RuntimeError("You cannot increment counters in the 'red_' namespace.")
+        if not type(by) is int:
+            raise TypeError(
+                f"Expected 'by' to be an integer, received {by.__class__.__name__} instead."
+            )
+        elif by < 0:
+            raise ValueError(
+                f"'by' needs to be greater than or equals to 0, however '{by}' was provided."
+            )
+
+        self.__counters[cog_qualified_name][counter] += by
+        return self.__counters[cog_qualified_name][counter]
+
+    def _inc_core_raw(self, cog_qualified_name: str, counter: str, by: int = 1) -> int:
+        if not type(cog_qualified_name) is str:
+            raise TypeError(
+                f"Expected cog_qualified_name to be a string, received {cog_qualified_name.__class__.__name__} instead."
+            )
+        if not type(counter) is str:
+            raise TypeError(
+                f"Expected counter to be a string, received {counter.__class__.__name__} instead."
+            )
+        if not self.__contains__((cog_qualified_name, counter)):
+            raise KeyError(f"'{counter}' hasn't been registered under '{cog_qualified_name}'.")
+        if not cog_qualified_name.lower().startswith("red_"):
+            raise RuntimeError(
+                "You cannot increment counters outside the 'red_' namespace with this private method."
+            )
+        if not type(by) is int:
+            raise TypeError(
+                f"Expected counter to be an integer, received {counter.__class__.__name__} instead."
+            )
+        elif by < 0:
+            raise ValueError(
+                f"'by' needs to be greater than or equals to 0, however '{by}' was provided."
+            )
+
+        self.__counters[cog_qualified_name][counter] += by
+        return self.__counters[cog_qualified_name][counter]
+
+    def contains(self, cog: Cog, counter: str) -> bool:
+        return self.contains_raw(cog.qualified_name, counter)
+
+    def contains_raw(self, cog_qualified_name: str, counter: str) -> bool:
+        return self.__contains__(
+            (
+                cog_qualified_name,
+                counter,
+            )
+        )
+
+    def get_all(self) -> Dict[str, Dict[str, int]]:
+        return copy.deepcopy(self.__counters)
+
+    def walk_counters(self, cog: Optional[Cog] = None) -> Optional[Tuple[str, str, int]]:
+        if cog:
+            if isinstance(cog, Cog):
+                cog_name = cog.qualified_name
+            else:
+                cog_name = cog
+
+            if not type(cog_name) is str:
+                raise TypeError(
+                    f"Expected cog_name to be a string, received {cog_name.__class__.__name__} instead."
+                )
+            if cog_name not in self.__counters:
+                return
+            for counter, value in self.__counters[cog_name].items():
+                yield cog_name, counter, value
+        else:
+            for cog_name, cog_counters in self.__counters.items():
+                for counter, value in cog_counters.items():
+                    yield cog_name, counter, value
+
+    def __contains__(self, keys: Tuple[Union[Cog, str], str]) -> bool:
+        cog, counter = keys[0], keys[1]
+        if not type(counter) is str:
+            raise TypeError(
+                f"Expected counter to be a string, received {counter.__class__.__name__} instead."
+            )
+        if isinstance(cog, Cog):
+            cog_name = cog.qualified_name
+        else:
+            cog_name = cog
+
+        if not type(cog_name) is str:
+            raise TypeError(
+                f"Expected cog_name to be a string, received {cog_name.__class__.__name__} instead."
+            )
+        if cog_name in self.__counters:
+            if counter in self.__counters[cog_name]:
+                return True
+        return False
+
+    def __getitem__(self, keys: Tuple[Union[Cog, str], str]) -> int:
+        cog, counter = keys[0], keys[1]
+        if not type(counter) is str:
+            raise TypeError(
+                f"Expected counter to be a string, received {counter.__class__.__name__} instead."
+            )
+        if isinstance(cog, Cog):
+            cog_name = cog.qualified_name
+        else:
+            cog_name = cog
+        if not type(cog_name) is str:
+            raise TypeError(
+                f"Expected cog_name to be a string, received {cog_name.__class__.__name__} instead."
+            )
+        if cog_name not in self.__counters:
+            raise KeyError(f"'{cog_name}' hasn't registered any counters.")
+
+        if counter not in self.__counters[cog_name]:
+            raise KeyError(f"'{counter}' hasn't been registered under '{cog_name}'.")
+
+        return self.__counters[cog_name][counter]
+
+    def __dir__(self):
+        return [
+            "__contains__",
+            "__repr__",
+            "__getitem__",
+            "contains",
+            "contains_raw",
+            "get",
+            "get_all",
+            "get_raw",
+            "inc",
+            "inc_raw",
+            "register_counters",
+            "register_counters_raw",
+            "unregister_counter",
+            "unregister_counter_raw",
+            "walk_counters",
+        ]
+
+    def __delitem__(self, keys: Tuple[Union[Cog, str], str]) -> NoReturn:
+        raise NotImplementedError("This operation is not supported.")
+
+    def __setitem__(self, keys: Tuple[Union[Cog, str], str], value: int) -> NoReturn:
+        raise NotImplementedError("This operation is not supported.")
+
+    def __repr__(self) -> str:
+        return "ProxyCounter(cogs={}, counters={})".format(
+            len(self.__counters), sum(len(v) for v in self.__counters.values())
+        )
