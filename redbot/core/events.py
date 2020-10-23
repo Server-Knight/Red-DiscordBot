@@ -15,9 +15,14 @@ from pkg_resources import DistributionNotFound
 from redbot.core import data_manager
 
 from redbot.core.commands import RedHelpFormatter, HelpSettings
-from redbot.core.i18n import Translator
+from redbot.core.i18n import (
+    Translator,
+    set_contextual_locale,
+    set_contextual_regional_format,
+    set_contextual_locales_from_guild,
+)
 from .utils import AsyncIter
-from .. import __version__ as red_version, version_info as red_version_info, VersionInfo
+from .. import __version__ as red_version, version_info as red_version_info
 from . import commands
 from .config import get_latest_confs
 from .utils._internal_utils import (
@@ -46,11 +51,13 @@ _ = Translator(__name__, __file__)
 def init_events(bot, cli_flags):
     @bot.event
     async def on_connect():
+        bot.counter._inc_core_raw("Red_Core", "on_connect")
         if bot._uptime is None:
             print("Connected to Discord. Getting ready...")
 
     @bot.event
     async def on_ready():
+        bot.counter._inc_core_raw("Red_Core", "on_ready")
         if bot._uptime is not None:
             return
 
@@ -119,7 +126,7 @@ def init_events(bot, cli_flags):
                 if expected_version(current_python, py_version_req):
                     installed_extras = []
                     for extra, reqs in red_pkg._dep_map.items():
-                        if extra is None:
+                        if extra is None or extra in {"dev", "all"}:
                             continue
                         try:
                             pkg_resources.require(req.name for req in reqs)
@@ -205,6 +212,7 @@ def init_events(bot, cli_flags):
 
     @bot.event
     async def on_command_completion(ctx: commands.Context):
+        bot.counter._inc_core_raw("Red_Core", "on_command_completion")
         await bot._delete_delay(ctx)
 
     @bot.event
@@ -243,6 +251,7 @@ def init_events(bot, cli_flags):
             if disabled_message:
                 await ctx.send(disabled_message.replace("{command}", ctx.invoked_with))
         elif isinstance(error, commands.CommandInvokeError):
+            bot.counter._inc_core_raw("Red_Core", "on_command_error_command_invoke_error")
             log.exception(
                 "Exception in command '{}'".format(ctx.command.qualified_name),
                 exc_info=error.original,
@@ -272,6 +281,7 @@ def init_events(bot, cli_flags):
             else:
                 await ctx.send(await format_fuzzy_results(ctx, fuzzy_commands, embed=False))
         elif isinstance(error, commands.BotMissingPermissions):
+            bot.counter._inc_core_raw("Red_Core", "on_command_error_bot_missing_permissions")
             if bin(error.missing.value).count("1") == 1:  # Only one perm missing
                 msg = _("I require the {permission} permission to execute that command.").format(
                     permission=format_perms_list(error.missing)
@@ -297,17 +307,30 @@ def init_events(bot, cli_flags):
                 msg = _("This command is on cooldown. Try again in 1 second.")
             await ctx.send(msg, delete_after=error.retry_after)
         elif isinstance(error, commands.MaxConcurrencyReached):
-            await ctx.send(
-                _(
+            if error.per is commands.BucketType.default:
+                msg = _(
+                    "Too many people using this command."
+                    " It can only be used {number} time(s) concurrently."
+                ).format(number=error.number)
+            else:
+                msg = _(
                     "Too many people using this command."
                     " It can only be used {number} time(s) per {type} concurrently."
                 ).format(number=error.number, type=error.per.name)
-            )
+            await ctx.send(msg)
         else:
+            bot.counter._inc_core_raw("Red_Core", "on_command_error")
+
             log.exception(type(error).__name__, exc_info=error)
 
     @bot.event
     async def on_message(message):
+        bot.counter._inc_core_raw("Red_Core", "on_message")
+        if not message.guild:
+            bot.counter._inc_core_raw("Red_Core", "on_message_dm")
+
+        await set_contextual_locales_from_guild(bot, message.guild)
+
         await bot.process_commands(message)
         discord_now = message.created_at
         if (
@@ -326,6 +349,8 @@ def init_events(bot, cli_flags):
 
     @bot.event
     async def on_command_add(command: commands.Command):
+        bot.counter._inc_core_raw("Red_Core", "on_command_add")
+
         disabled_commands = await bot._config.disabled_commands()
         if command.qualified_name in disabled_commands:
             command.enabled = False
@@ -344,17 +369,20 @@ def init_events(bot, cli_flags):
 
     @bot.event
     async def on_guild_join(guild: discord.Guild):
+        bot.counter._inc_core_raw("Red_Core", "on_guild_join")
         await _guild_added(guild)
 
     @bot.event
     async def on_guild_available(guild: discord.Guild):
         # We need to check guild-disabled commands here since some cogs
         # are loaded prior to `on_ready`.
+        bot.counter._inc_core_raw("Red_Core", "on_guild_available")
         await _guild_added(guild)
 
     @bot.event
-    async def on_guild_leave(guild: discord.Guild):
+    async def on_guild_remove(guild: discord.Guild):
         # Clean up any unneeded checks
+        bot.counter._inc_core_raw("Red_Core", "on_guild_remove")
         disabled_commands = await bot._config.guild(guild).disabled_commands()
         for command_name in disabled_commands:
             command_obj = bot.get_command(command_name)
@@ -363,11 +391,58 @@ def init_events(bot, cli_flags):
 
     @bot.event
     async def on_cog_add(cog: commands.Cog):
+        bot.counter._inc_core_raw("Red_Core", "on_cog_add")
         confs = get_latest_confs()
         for c in confs:
             uuid = c.unique_identifier
             group_data = c.custom_groups
             await bot._config.custom("CUSTOM_GROUPS", c.cog_name, uuid).set(group_data)
+
+    @bot.event
+    async def on_voice_state_update(
+        member: discord.Member, before: discord.VoiceState, after: discord.VoiceState
+    ) -> None:
+        bot.counter._inc_core_raw("Red_Core", "on_voice_state_update")
+
+    @bot.event
+    async def on_message_edit(_prior, message):
+        bot.counter._inc_core_raw("Red_Core", "on_message_edit")
+
+    @bot.event
+    async def on_user_update(before: discord.User, after: discord.User):
+        bot.counter._inc_core_raw("Red_Core", "on_user_update")
+
+    @bot.event
+    async def on_member_update(before: discord.Member, after: discord.Member):
+        bot.counter._inc_core_raw("Red_Core", "on_member_update")
+
+    @bot.event
+    async def on_member_join(member: discord.Member):
+        bot.counter._inc_core_raw("Red_Core", "on_member_join")
+
+    @bot.event
+    async def on_red_audio_track_start(guild: discord.Guild, track, requester: discord.Member):
+        bot.counter._inc_core_raw("Red_Core", "on_red_audio_track_start")
+
+    @bot.event
+    async def on_red_audio_queue_end(guild: discord.Guild, track, requester: discord.Member):
+        bot.counter._inc_core_raw("Red_Core", "on_red_audio_queue_end")
+
+    @bot.event
+    async def on_red_audio_track_end(guild: discord.Guild, track, requester: discord.Member):
+        bot.counter._inc_core_raw("Red_Core", "on_red_audio_track_end")
+
+    @bot.event
+    async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+        bot.counter._inc_core_raw("Red_Core", "on_raw_reaction_add")
+
+    @bot.event
+    async def on_trivia_end(session):
+        bot.counter._inc_core_raw("Red_Core", "on_trivia_end")
+
+    @bot.event
+    async def on_filter_message_delete(message, hits):
+        bot.counter._inc_core_raw("Red_Core", "on_filter_message_delete")
 
 
 def _get_startup_screen_specs():

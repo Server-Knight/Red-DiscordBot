@@ -7,13 +7,13 @@ import shutil
 import sys
 import contextlib
 import weakref
-import functools
 from collections import namedtuple
 from datetime import datetime
 from enum import IntEnum
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import (
+    Iterable,
     Optional,
     Union,
     List,
@@ -26,6 +26,7 @@ from typing import (
     Any,
     Literal,
     MutableMapping,
+    overload,
 )
 from types import MappingProxyType
 
@@ -40,17 +41,16 @@ from .data_manager import cog_data_path
 from .dev_commands import Dev
 from .events import init_events
 from .global_checks import init_global_checks
-
 from .settings_caches import (
     PrefixManager,
     IgnoreManager,
     WhitelistBlacklistManager,
     DisabledCogCache,
+    I18nManager,
 )
-
 from .rpc import RPCMixin
 from .utils import common_filters, AsyncIter
-from .utils._internal_utils import send_to_owners_with_prefix_replaced
+from .utils._internal_utils import send_to_owners_with_prefix_replaced, ProxyCounter
 
 CUSTOM_GROUPS = "CUSTOM_GROUPS"
 SHARED_API_TOKENS = "SHARED_API_TOKENS"
@@ -90,6 +90,37 @@ class RedBase(
         self._config = Config.get_core_conf(force_registration=False)
         self.rpc_enabled = cli_flags.rpc
         self.rpc_port = cli_flags.rpc_port
+        self._counter = ProxyCounter()
+        self._counter._register_core_counters_raw(
+            "Red_Core",
+            "on_connect",
+            "on_ready",
+            "on_command_completion",
+            "on_command_error",
+            "on_command_error_command_invoke_error",
+            "on_command_error_bot_missing_permissions",
+            "on_message",
+            "on_command_add",
+            "on_guild_join",
+            "on_guild_available",
+            "on_guild_remove",
+            "on_cog_add",
+            "on_message_without_command",
+            "on_modlog_case_edit",
+            "on_modlog_case_create",
+            "on_trivia_end",
+            "on_raw_reaction_add",
+            "on_user_update",
+            "on_member_update",
+            "on_member_join",
+            "on_message_edit",
+            "on_message_dm",
+            "on_voice_state_update",
+            "on_red_audio_queue_end",
+            "on_red_audio_track_start",
+            "on_red_audio_track_end",
+            "on_filter_message_delete",
+        )
         self._last_exception = None
         self._config.register_global(
             token=None,
@@ -112,6 +143,7 @@ class RedBase(
             help__verify_checks=True,
             help__verify_exists=False,
             help__tagline="",
+            help__use_tick=False,
             description="Red V3",
             invite_public=False,
             invite_perm=0,
@@ -140,6 +172,8 @@ class RedBase(
             disabled_commands=[],
             autoimmune_ids=[],
             delete_delay=-1,
+            locale=None,
+            regional_format=None,
         )
 
         self._config.register_channel(embeds=None, ignored=False)
@@ -157,6 +191,7 @@ class RedBase(
         self._disabled_cog_cache = DisabledCogCache(self._config)
         self._ignored_cache = IgnoreManager(self._config)
         self._whiteblacklist_cache = WhitelistBlacklistManager(self._config)
+        self._i18n_cache = I18nManager(self._config)
 
         async def prefix_manager(bot, message) -> List[str]:
             prefixes = await self._prefix_cache.get_prefixes(message.guild)
@@ -169,6 +204,12 @@ class RedBase(
 
         if "owner_id" in kwargs:
             raise RuntimeError("Red doesn't accept owner_id kwarg, use owner_ids instead.")
+
+        if "intents" not in kwargs:
+            intents = discord.Intents.all()
+            for intent_name in cli_flags.disable_intent:
+                setattr(intents, intent_name, False)
+            kwargs["intents"] = intents
 
         self._owner_id_overwrite = cli_flags.owner
 
@@ -245,12 +286,12 @@ class RedBase(
                 "and implement the required interfaces."
             )
 
-        # do not switch to isinstance, we want to know that this has not been overriden,
+        # do not switch to isinstance, we want to know that this has not been overridden,
         # even with a subclass.
         if type(self._help_formatter) is commands.help.RedHelpFormatter:
             self._help_formatter = formatter
         else:
-            raise RuntimeError("The formatter has already been overriden.")
+            raise RuntimeError("The formatter has already been overridden.")
 
     def reset_help_formatter(self):
         """
@@ -393,9 +434,19 @@ class RedBase(
         )
 
     @property
+    def counter(self) -> ProxyCounter:
+        return self._counter
+
+    @counter.setter
+    def counter(self, value) -> NoReturn:
+        raise RuntimeError(
+            "Please don't try to replace the counter attribute as other cogs may depend on it."
+        )
+
+    @counter.deleter
     def counter(self) -> NoReturn:
-        raise AttributeError(
-            "Please make your own counter object by importing ``Counter`` from ``collections``."
+        raise RuntimeError(
+            "Please don't try to delete the counter attribute as other cogs may depend on it."
         )
 
     @property
@@ -514,6 +565,234 @@ class RedBase(
                     return False
 
         return True
+
+    async def add_to_blocklist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Adds users and roles to the blocklist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be added to the blocklist.
+        guild : Optional[discord.Guild]
+           The guild to add the entries to. If ``None`` then add to the global blocklist
+
+        Raises
+        ------
+        TypeError
+            Did not provide valid``who_or_what``
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been added to the blocklist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.add_to_blacklist(guild, uids)
+        return uids
+
+    async def add_to_allowlist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Adds users and roles to the allowlist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be added to the allowlist.
+        guild : Optional[discord.Guild]
+           The guild to add the entries to. If ``None`` then add to the global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what`` is not a list of integers
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been added to the allowlist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.add_to_whitelist(guild, uids)
+        return uids
+
+    async def add_to_blocklist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Adds users and roles to the blocklist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of role and user ids to be added to the blocklist.
+        guild_id : Optional[int]
+           The guild to add the entries to. If ``None`` then add to the global blocklist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been added to the blocklist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.add_to_blacklist(guild_id, who_or_what_ids)
+        return who_or_what_ids
+
+    async def add_to_allowlist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Adds users and roles to the allowlist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of discord roles and users to be added to the allowlist.
+        guild_id : Optional[int]
+           The guild to add the entries to. If ``None`` then add to the global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been added to the allowlist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.add_to_whitelist(guild_id, who_or_what_ids)
+        return who_or_what_ids
+
+    async def remove_from_blocklist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Remove users and roles from the blocklist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be removed from the blocklist.
+        guild : Optional[discord.Guild]
+           The guild to remove the entries from. If ``None`` then remove from the global blocklist
+
+        Raises
+        ------
+        TypeError
+            Did not provide valid``who_or_what``
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been removed from the blocklist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.remove_from_blacklist(guild, uids)
+        return uids
+
+    async def remove_from_allowlist(
+        self,
+        who_or_what: Iterable[Union[discord.Role, discord.User]],
+        guild: Optional[discord.Guild] = None,
+    ):
+        """
+        Remove users and roles from the allowlist.
+
+        Parameters
+        ----------
+        who_or_what : List[discord.Role, discord.User]
+           A list of discord roles and users to be removed from the allowlist.
+        guild : Optional[discord.Guild]
+           The guild to remove the entries from. If ``None`` then remove from global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what`` is not a list of integers
+
+        Returns
+        -------
+        Set[int]
+           A set of discord object ids that have been removed from the allowlist.
+        """
+        uids = {_id for o in who_or_what if (_id := getattr(o, "id", None) is not None)}
+        await self._whiteblacklist_cache.remove_from_whitelist(guild, uids)
+        return uids
+
+    async def remove_from_blocklist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Remove users and roles from the blocklist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of role and user ids to be removed from the blocklist.
+        guild_id : Optional[int]
+           The guild to remove the entries from. If ``None`` then remove from the global blocklist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been removed from the blocklist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.remove_from_blacklist(guild_id, who_or_what_ids)
+        return who_or_what_ids
+
+    async def remove_from_allowlist_raw(
+        self, who_or_what_ids: Iterable[int], guild_id: Optional[int] = None
+    ):
+        """
+        Remove users and roles from the allowlist.
+
+        Parameters
+        ----------
+        who_or_what_ids : List[int]
+           A list of discord roles and users to be removed from the allowlist.
+        guild_id : Optional[int]
+           The guild to remove the entries from. If ``None`` then remove from global allowlist
+
+        Raises
+        ------
+        TypeError
+           ``who_or_what_ids`` is not a list of integers
+
+        Returns
+        -------
+        List[int]
+           A set of discord object ids that have been removed from the allowlist.
+        """
+        if guild_id:
+            guild_id = discord.Object(id=guild_id)
+        await self._whiteblacklist_cache.remove_from_whitelist(guild_id, who_or_what_ids)
+        return who_or_what_ids
 
     async def message_eligible_as_command(self, message: discord.Message) -> bool:
         """
@@ -1042,22 +1321,37 @@ class RedBase(
         """
         return await self._config.guild(discord.Object(id=guild_id)).mod_role()
 
-    async def get_shared_api_tokens(self, service_name: str) -> Dict[str, str]:
+    @overload
+    async def get_shared_api_tokens(self, service_name: str = ...) -> Dict[str, str]:
+        ...
+
+    @overload
+    async def get_shared_api_tokens(self, service_name: None = ...) -> Dict[str, Dict[str, str]]:
+        ...
+
+    async def get_shared_api_tokens(
+        self, service_name: Optional[str] = None
+    ) -> Union[Dict[str, Dict[str, str]], Dict[str, str]]:
         """
-        Gets the shared API tokens for a service
+        Gets the shared API tokens for a service, or all of them if no argument specified.
 
         Parameters
         ----------
-        service_name: str
-            The service to get tokens for.
+        service_name: str, optional
+            The service to get tokens for. Leave empty to get tokens for all services.
 
         Returns
         -------
-        Dict[str, str]
+        Dict[str, Dict[str, str]] or Dict[str, str]
             A Mapping of token names to tokens.
             This mapping exists because some services have multiple tokens.
+            If ``service_name`` is `None`, this method will return
+            a mapping with mappings for all services.
         """
-        return await self._config.custom(SHARED_API_TOKENS, service_name).all()
+        if service_name is None:
+            return await self._config.custom(SHARED_API_TOKENS).all()
+        else:
+            return await self._config.custom(SHARED_API_TOKENS, service_name).all()
 
     async def set_shared_api_tokens(self, service_name: str, **tokens: str):
         """
@@ -1107,6 +1401,25 @@ class RedBase(
             for name in token_names:
                 group.pop(name, None)
 
+    async def remove_shared_api_services(self, *service_names: str):
+        """
+        Removes shared API services, as well as keys and tokens associated with them.
+
+        Parameters
+        ----------
+        *service_names: str
+            The services to remove.
+
+        Examples
+        ----------
+        Removing the youtube service
+
+        >>> await ctx.bot.remove_shared_api_services("youtube")
+        """
+        async with self._config.custom(SHARED_API_TOKENS).all() as group:
+            for service in service_names:
+                group.pop(service, None)
+
     async def get_context(self, message, *, cls=commands.Context):
         return await super().get_context(message, cls=cls)
 
@@ -1124,6 +1437,7 @@ class RedBase(
             ctx = None
 
         if ctx is None or ctx.valid is False:
+            self.counter._inc_core_raw("Red_Core", "on_message_without_command")
             self.dispatch("message_without_command", message)
 
     @staticmethod
@@ -1169,7 +1483,7 @@ class RedBase(
 
     def remove_cog(self, cogname: str):
         cog = self.get_cog(cogname)
-        if cog is None or isinstance(cog, commands.commands._RuleDropper):
+        if cog is None:
             return
 
         for cls in inspect.getmro(cog.__class__):
@@ -1238,7 +1552,7 @@ class RedBase(
         **kwargs,
     ):
         """
-        This is a convienience wrapper around
+        This is a convenience wrapper around
 
         discord.abc.Messageable.send
 
@@ -1248,7 +1562,7 @@ class RedBase(
 
         This should realistically only be used for responding using user provided
         input. (unfortunately, including usernames)
-        Manually crafted messages which dont take any user input have no need of this
+        Manually crafted messages which don't take any user input have no need of this
 
         Returns
         -------
@@ -1326,9 +1640,6 @@ class RedBase(
                     subcommand.requires.ready_event.set()
 
     def remove_command(self, name: str) -> None:
-        command = self.get_command(name)
-        if isinstance(command, commands.commands._RuleDropper):
-            return
         command = super().remove_command(name)
         if not command:
             return
