@@ -39,8 +39,7 @@ class VoiceMutes(MixinMeta):
 
         """
         if user_voice_state is None or user_voice_state.channel is None:
-            await ctx.send(_("That user is not in a voice channel."))
-            return False, None
+            return False, _("That user is not in a voice channel.")
         voice_channel: discord.VoiceChannel = user_voice_state.channel
         required_perms = discord.Permissions()
         required_perms.update(**perms)
@@ -96,7 +95,7 @@ class VoiceMutes(MixinMeta):
             for user in users:
                 user_voice_state = user.voice
                 can_move, perm_reason = await self._voice_perm_check(
-                    ctx, user_voice_state, mute_members=True, manage_channels=True
+                    ctx, user_voice_state, mute_members=True, manage_permissions=True
                 )
                 if not can_move:
                     issue_list.append((user, perm_reason))
@@ -141,7 +140,7 @@ class VoiceMutes(MixinMeta):
                         user,
                         author,
                         reason,
-                        until=None,
+                        until=until,
                         channel=channel,
                     )
                     async with self.config.member(user).perms_cache() as cache:
@@ -187,7 +186,7 @@ class VoiceMutes(MixinMeta):
             for user in users:
                 user_voice_state = user.voice
                 can_move, perm_reason = await self._voice_perm_check(
-                    ctx, user_voice_state, mute_members=True, manage_channels=True
+                    ctx, user_voice_state, mute_members=True, manage_permissions=True
                 )
                 if not can_move:
                     issue_list.append((user, perm_reason))
