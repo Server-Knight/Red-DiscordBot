@@ -92,7 +92,7 @@ class Audio(
             cache_level=0,
             cache_age=365,
             daily_playlists=False,
-            global_db_enabled=False,
+            global_db_enabled=True,
             global_db_get_timeout=5,
             status=False,
             use_external_lavalink=False,

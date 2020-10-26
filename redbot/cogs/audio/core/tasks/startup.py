@@ -76,6 +76,8 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
                 player: Optional[lavalink.Player]
                 track_data = list(track_data)
                 guild = self.bot.get_guild(guild_id)
+                if not guild:
+                    continue
                 persist_cache = self._persist_queue_cache.setdefault(
                     guild_id, await self.config.guild(guild).persist_queue()
                 )
