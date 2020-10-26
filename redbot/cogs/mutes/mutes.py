@@ -334,7 +334,7 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
             if not result:
                 continue
             _mmeber, channel, reason = result
-            unmuted_channels.pop(channel)
+            unmuted_channels.remove(channel)
         modlog_reason = _("Automatic unmute")
 
         channel_list = humanize_list([c.mention for c in unmuted_channels if c is not None])
@@ -364,7 +364,7 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
             error_msg = _("{member} could not be unmuted for the following reasons:\n").format(
                 member=member
             )
-            for reason, channel_list in reasons:
+            for reason, channel_list in reasons.items():
                 error_msg += _("{reason} In the following channels: {channels}\n").format(
                     reason=reason,
                     channels=humanize_list([c.mention for c in channel_list]),
@@ -404,6 +404,9 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
         success = await self.channel_unmute_user(
             channel.guild, channel, author, member, _("Automatic unmute")
         )
+        async with self.config.channel(channel).muted_users() as muted_users:
+            if str(member.id) in muted_users:
+                del muted_users[str(member.id)]
         if success["success"]:
             if create_case:
                 if isinstance(channel, discord.VoiceChannel):
@@ -421,9 +424,6 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
                     until=None,
                     channel=channel,
                 )
-            async with self.config.channel(channel).muted_users() as muted_users:
-                if str(member.id) in muted_users:
-                    del muted_users[str(member.id)]
             return None
         else:
             error_msg = _(
@@ -656,7 +656,8 @@ class Mutes(VoiceMutes, commands.Cog, metaclass=CompositeMetaClass):
         """
         if not role:
             await self.config.guild(ctx.guild).mute_role.set(None)
-            del self.mute_role_cache[ctx.guild.id]
+            if ctx.guild.id in self.mute_role_cache:
+                del self.mute_role_cache[ctx.guild.id]
             await self.config.guild(ctx.guild).sent_instructions.set(False)
             # reset this to warn users next time they may have accidentally
             # removed the mute role
