@@ -945,34 +945,10 @@ class RedBase(
 
         return self._color
 
-    async def get_or_fetch_channel(
-        self, channel_id: int
-    ) -> Union[discord.abc.GuildChannel, discord.abc.PrivateChannel]:
-        """
-        Retrieves a discord.abc.GuildChannel or discord.abc.PrivateChannel with the specified ID.
-
-        .. warning::
-
-           This method may make an API call if the channel is not found in the bot cache. For general usage, consider ``bot.get_channel`` instead.
-
-        Raises
-        -------
-        Errors
-            Please refer to `discord.Client.fetch_channel`.
-
-        Returns
-        --------
-        Union[discord.abc.GuildChannel, discord.abc.PrivateChannel]
-           The channel from the ID.
-        """
-        if (channel := self.get_channel(channel_id)) is not None:
-            return channel
-        return await self.fetch_channel(channel_id)
-
     async def get_or_fetch_user(self, user_id: int) -> discord.User:
         """
-        Retrieves a discord.User based on their ID. This can only
-        be used by bot accounts. You do not have to share any guilds
+        Retrieves a `discord.User` based on their ID.
+        You do not have to share any guilds
         with the user to get this information, however many operations
         do require that you do.
 
@@ -983,13 +959,12 @@ class RedBase(
         Parameters
         -----------
         user_id: int
-            The user's ID to fetch from.
+            The ID of the user that should be retrieved.
 
         Raises
         -------
         Errors
             Please refer to `discord.Client.fetch_user`.
-
 
         Returns
         --------
@@ -1003,6 +978,7 @@ class RedBase(
 
     async def get_or_fetch_member(self, guild: discord.Guild, member_id: int) -> discord.Member:
         """
+        Retrieves a `discord.Member` from a guild and a member ID.
 
         .. warning::
 
@@ -1010,16 +986,15 @@ class RedBase(
 
         Parameters
         -----------
-        guild: `discord.Guild`
-            The guild to look into.
+        guild: discord.Guild
+            The guild which the member should be retrieved from.
         member_id: int
-            The user's ID to fetch from.
+            The ID of the member that should be retrieved.
 
         Raises
         -------
         Errors
             Please refer to `discord.Guild.fetch_member`.
-
 
         Returns
         --------
