@@ -1,0 +1,17 @@
+version: "1"
+rules:                      # Array of rules
+  - base: V3/develop            # Required. Target branch
+    upstream: Cog-Creators:V3/develop    # Required. Must be in the same fork network.
+    mergeMethod: hardreset  # Optional, one of [none, merge, squash, rebase, hardreset], Default: none.
+    mergeUnstable: false    # Optional, merge pull request even when the mergeable_state is not clean. Default: false
+  - base: V3/edge
+    upstream: Cog-Creators:V3/develop        # Required. Can be a branch in the same forked repo.
+    mergeMethod: rebase  # Optional, one of [none, merge, squash, rebase, hardreset], Default: none.
+    mergeUnstable: false    # Optional, merge pull request even when the mergeable_state is not clean. Default: false
+    assignees:              # Optional
+      - Drapersniper
+    reviewers:              # Optional
+      - Drapersniper
+    conflictReviewers:      # Optional, on merge conflict assign a reviewer
+      - Drapersniper
+label: ":arrow_heading_down: pull"  # Optional
