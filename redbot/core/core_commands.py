@@ -1599,8 +1599,12 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         global_data = await ctx.bot._config.all()
         locale = global_data["locale"]
         regional_format = global_data["regional_format"] or locale
-        sudotime = (_("Sudo Timeout: {delay}").format(
-            delay=humanize_timedelta(seconds=global_data["sudotime"])) if ctx.bot._sudo_enabled else ""
+        sudotime = (
+            _("Sudo Timeout: {delay}").format(
+                delay=humanize_timedelta(seconds=global_data["sudotime"])
+            )
+            if ctx.bot._sudo_enabled
+            else ""
         )
         colour = discord.Colour(global_data["color"])
         prefix_string = " ".join(prefixes)
