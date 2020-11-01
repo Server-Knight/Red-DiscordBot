@@ -108,27 +108,33 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
                 vc = 0
                 if player is None:
                     auto_deafen = await self.config.guild_from_id(guild.id).auto_deafen()
-                    try:
-                        notify_channel_id, vc_id = metadata.pop(
-                            guild_id, (None, track_data[-1].room_id)
-                        )
-                        vc = guild.get_channel(vc_id)
-                        if not vc:
+                    while tries < 25 and vc is not None:
+                        try:
+                            notify_channel_id, vc_id = metadata.pop(
+                                guild_id, (None, track_data[-1].room_id)
+                            )
+                            vc = guild.get_channel(vc_id)
+                            if not vc:
+                                break
+                            perms = vc.permissions_for(guild.me)
+                            if not (perms.connect and perms.speak):
+                                vc = None
+                                break
+                            await lavalink.connect(vc, deafen=auto_deafen)
+                            player = lavalink.get_player(guild.id)
+                            player.store("connect", datetime.datetime.utcnow())
+                            player.store("guild", guild_id)
+                            player.store("channel", notify_channel_id)
                             break
-                        perms = vc.permissions_for(guild.me)
-                        if not (perms.connect and perms.speak):
-                            vc = None
-                            break
-                        await lavalink.connect(vc, deafen=auto_deafen)
-                        player = lavalink.get_player(guild.id)
-                        player.store("connect", datetime.datetime.utcnow())
-                        player.store("guild", guild_id)
-                        player.store("channel", notify_channel_id)
-                        break
-                    except IndexError:
-                        await asyncio.sleep(5)
-                    except Exception as exc:
-                        debug_exc_log(log, exc, "Failed to restore music voice channel")
+                        except IndexError:
+                            await asyncio.sleep(5)
+                            tries += 1
+                        except Exception as exc:
+                            tries += 1
+                            debug_exc_log(log, exc, "Failed to restore music voice channel")
+                            if vc is None:
+                                break
+
                 if tries >= 25 or guild is None or vc is None or player is None:
                     await self.api_interface.persistent_queue_api.drop(guild_id)
                     continue
@@ -169,25 +175,29 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
                     player = None
             if player is None:
                 auto_deafen = await self.config.guild_from_id(guild.id).auto_deafen()
-                try:
-                    vc = guild.get_channel(vc_id)
-                    if not vc:
+                while tries < 25 and vc is not None:
+                    try:
+                        vc = guild.get_channel(vc_id)
+                        if not vc:
+                            break
+                        perms = vc.permissions_for(guild.me)
+                        if not (perms.connect and perms.speak):
+                            vc = None
+                            break
+                        await lavalink.connect(vc, deafen=auto_deafen)
+                        player = lavalink.get_player(guild.id)
+                        player.store("connect", datetime.datetime.utcnow())
+                        player.store("guild", guild_id)
+                        player.store("channel", notify_channel_id)
                         break
-                    perms = vc.permissions_for(guild.me)
-                    if not (perms.connect and perms.speak):
-                        vc = None
-                        break
-                    await lavalink.connect(vc, deafen=auto_deafen)
-                    player = lavalink.get_player(guild.id)
-                    player.store("connect", datetime.datetime.utcnow())
-                    player.store("guild", guild_id)
-                    player.store("channel", notify_channel_id)
-                    break
-                except IndexError:
-                    await asyncio.sleep(5)
-                    tries += 1
-                except Exception as exc:
-                    debug_exc_log(log, exc, "Failed to restore music voice channel")
+                    except IndexError:
+                        await asyncio.sleep(5)
+                        tries += 1
+                    except Exception as exc:
+                        tries += 1
+                        debug_exc_log(log, exc, "Failed to restore music voice channel")
+                        if vc is None:
+                            break
                 if tries >= 25 or guild is None or vc is None or player is None:
                     continue
                 shuffle = await self.config.guild(guild).shuffle()
