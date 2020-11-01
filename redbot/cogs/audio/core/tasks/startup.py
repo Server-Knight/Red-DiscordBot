@@ -84,6 +84,7 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
 
         for guild_id, track_data in itertools.groupby(tracks_to_restore, key=lambda x: x.guild_id):
             await asyncio.sleep(0)
+            tries = 0
             try:
                 player: Optional[lavalink.Player] = None
                 track_data = list(track_data)
@@ -108,7 +109,7 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
                 vc = 0
                 if player is None:
                     auto_deafen = await self.config.guild_from_id(guild.id).auto_deafen()
-                    while tries < 25 and vc is not None:
+                    while tries < 5 and vc is not None:
                         try:
                             notify_channel_id, vc_id = metadata.pop(
                                 guild_id, (None, track_data[-1].room_id)
@@ -134,8 +135,10 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
                             debug_exc_log(log, exc, "Failed to restore music voice channel")
                             if vc is None:
                                 break
+                            else:
+                                await asyncio.sleep(1)
 
-                if tries >= 25 or guild is None or vc is None or player is None:
+                if tries >= 5 or guild is None or vc is None or player is None:
                     await self.api_interface.persistent_queue_api.drop(guild_id)
                     continue
 
@@ -162,6 +165,7 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
             guild = self.bot.get_guild(guild_id)
             player: Optional[lavalink.Player] = None
             vc = 0
+            tries = 0
             if not guild:
                 continue
             if self.lavalink_connection_aborted:
@@ -175,7 +179,7 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
                     player = None
             if player is None:
                 auto_deafen = await self.config.guild_from_id(guild.id).auto_deafen()
-                while tries < 25 and vc is not None:
+                while tries < 5 and vc is not None:
                     try:
                         vc = guild.get_channel(vc_id)
                         if not vc:
@@ -198,7 +202,9 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
                         debug_exc_log(log, exc, "Failed to restore music voice channel")
                         if vc is None:
                             break
-                if tries >= 25 or guild is None or vc is None or player is None:
+                        else:
+                            await asyncio.sleep(1)
+                if tries >= 5 or guild is None or vc is None or player is None:
                     continue
                 shuffle = await self.config.guild(guild).shuffle()
                 repeat = await self.config.guild(guild).repeat()
