@@ -250,6 +250,20 @@ def parse_cli_flags(args):
         "This flag can be used multiple times to specify multiple intents.",
     )
     parser.add_argument(
+        "--force-rich-logging",
+        action="store_true",
+        dest="rich_logging",
+        default=None,
+        help="Forcefully enables the Rich logging handlers. This is normally enabled for supported active terminals.",
+    )
+    parser.add_argument(
+        "--force-disable-rich-logging",
+        action="store_false",
+        dest="rich_logging",
+        default=None,
+        help="Forcefully disables the Rich logging handlers.",
+    )
+    parser.add_argument(
         "--enable-sudo", action="store_true", help="Enable the sudo/unsudo permission mechanics."
     )
 
