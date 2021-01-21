@@ -308,18 +308,18 @@ class RedHelpFormatter(HelpFormatterABC):
         if help_settings.show_aliases and aliases:
             alias_fmt = _("Aliases") if len(command.aliases) > 1 else _("Alias")
             aliases = sorted(aliases, key=len)
+
             a_counter = 0
-            valid_alias_list = [
-                af
-                for a in aliases
-                if (af := f"{a}")
-                and len(af) < 500
-                and ((a_counter + len(af)) < 500)
-                and (a_counter := a_counter + len(af))
-            ]
+            valid_alias_list = []
+            for alias in aliases:
+                if (a_counter := a_counter + len(alias)) < 500:
+                    valid_alias_list.append(alias)
+                else:
+                    break
+
             a_diff = len(aliases) - len(valid_alias_list)
             aliases_list = [
-                f"{ctx.clean_prefix}{command.parent.name + ' ' if command.parent else ''}{alias}"
+                f"{ctx.clean_prefix}{command.parent.qualified_name + ' ' if command.parent else ''}{alias}"
                 for alias in valid_alias_list
             ]
             if len(valid_alias_list) < 10:
@@ -328,11 +328,12 @@ class RedHelpFormatter(HelpFormatterABC):
                 aliases_formatted_list = ", ".join(aliases_list)
                 if a_diff > 1:
                     aliases_content = _("{aliases} and {number} more aliases.").format(
-                        aliases=aliases_formatted_list,
-                        number=humanize_number(a_diff),
+                        aliases=aliases_formatted_list, number=humanize_number(a_diff)
                     )
                 else:
-                    aliases_content = _("{} and one more alias.").format(aliases_formatted_list)
+                    aliases_content = _("{aliases} and one more alias.").format(
+                        aliases=aliases_formatted_list
+                    )
             signature += f"\n{alias_fmt}: {aliases_content}"
 
         subcommands = None
