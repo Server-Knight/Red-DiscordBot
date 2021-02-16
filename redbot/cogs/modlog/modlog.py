@@ -155,7 +155,7 @@ class ModLog(commands.Cog):
             cog=self,
             delete_message_after=True,
         ).start(ctx=ctx, wait=False)
-    
+
     @commands.command()
     @commands.guild_only()
     async def listcases(self, ctx: commands.Context, *, member: Union[discord.Member, int]):
