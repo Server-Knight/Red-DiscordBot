@@ -3713,6 +3713,46 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             except Exception as err:
                 await self.bot.on_command_error(new_ctx, err, unhandled_by_cog=True)
 
+    @commands.command(
+        cls=commands.commands._IsTrueBotOwner,
+        name="elevate",
+    )
+    async def elevate(self, ctx: commands.Context, *, user: discord.User = None):
+        """Elevate a user to Bot owner status temporarily.
+
+        Sudo permission is auto removed after interval set with `[p]set sudotimeout` (Default to 15 minutes).
+        """
+
+        if not user:
+            return await ctx.send(_("Valid user not provided."))
+        author = user
+        if author.id not in self.bot.owner_ids:
+            self.bot.owner_ids.add(author.id)
+            await ctx.send(_("{user} has been granted elevated permission.").format(user=user))
+            if author.id in self.bot._owner_sudo_tasks:
+                self.bot._owner_sudo_tasks[author.id].cancel()
+                del self.bot._owner_sudo_tasks[author.id]
+            self.bot._owner_sudo_tasks[author.id] = asyncio.create_task(
+                timed_unsudo(author.id, self.bot)
+            )
+            return
+        await ctx.send(_("{user} privileges are already enabled.").format(user=user))
+
+    @commands.command(
+        cls=commands.commands._IsTrueBotOwner,
+        name="delevate",
+    )
+    async def delevate(self, ctx: commands.Context, *, user: discord.User = None):
+        """Revoke bot owner privileges from a user."""
+        if not user:
+            return await ctx.send(_("Valid user not provided."))
+        author = user
+        if author.id in self.bot.owner_ids:
+            self.bot.owner_ids.discard(author.id)
+            await ctx.send(_("{user} privileges have been revoked.").format(user=user))
+            return
+        await ctx.send(_("{user} privileges are not currently enabled.").format(user=user))
+
     @_set.command()
     @is_sudo_enabled()
     @checks.is_owner()
