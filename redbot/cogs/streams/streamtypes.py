@@ -281,7 +281,38 @@ class TwitchStream(Stream):
         self.id = kwargs.pop("id", None)
         self._client_id = kwargs.pop("token", None)
         self._bearer = kwargs.pop("bearer", None)
+        self.games = kwargs.pop("games", {})
         super().__init__(**kwargs)
+
+    async def get_game_info_by_id(self, game_id: int):
+        header = {"Client-ID": str(self._client_id)}
+        if self._bearer is not None:
+            header = {**header, "Authorization": f"Bearer {self._bearer}"}
+        params = {"id": game_id}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.twitch.tv/helix/games", headers=header, params=params
+            ) as r:
+                game_data = await r.json(encoding="utf-8")
+        if game_data:
+            return game_data
+        else:
+            return {}
+
+    async def get_game_info_by_name(self, game_name: str):
+        header = {"Client-ID": str(self._client_id)}
+        if self._bearer is not None:
+            header = {**header, "Authorization": f"Bearer {self._bearer}"}
+        params = {"name": game_name}
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
+            async with session.get(
+                "https://api.twitch.tv/helix/games", headers=header, params=params
+            ) as r:
+                game_data = await r.json(encoding="utf-8", loads=json.loads)
+        if game_data:
+            return game_data["data"]
+        else:
+            return []
 
     async def is_online(self):
         if not self.id:
@@ -309,12 +340,7 @@ class TwitchStream(Stream):
 
             game_id = data["game_id"]
             if game_id:
-                params = {"id": game_id}
-                async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
-                    async with session.get(
-                        "https://api.twitch.tv/helix/games", headers=header, params=params
-                    ) as r:
-                        game_data = await r.json(encoding="utf-8", loads=json.loads)
+                game_data = await self.get_game_info_by_id(game_id)
                 if game_data:
                     game_data = game_data["data"][0]
                     data["game_name"] = game_data["name"]
@@ -341,7 +367,7 @@ class TwitchStream(Stream):
                 data["login"] = user_profile_data["data"][0]["login"]
 
             is_rerun = False
-            return self.make_embed(data), is_rerun
+            return self.make_embed(data), data, is_rerun
         elif r.status == 400:
             raise InvalidTwitchCredentials()
         elif r.status == 404:
@@ -401,6 +427,10 @@ class HitboxStream(Stream):
 
     token_name = None  # This streaming services don't currently require an API key
 
+    def __init__(self, **kwargs):
+        self.games = kwargs.pop("games", {})
+        super().__init__(**kwargs)
+
     async def is_online(self):
         url = "https://api.smashcast.tv/media/live/" + self.name
 
@@ -416,7 +446,7 @@ class HitboxStream(Stream):
             raise OfflineStream()
         elif data["livestream"][0]["media_is_live"] == "1":
             # self.already_online = True
-            return self.make_embed(data)
+            return self.make_embed(data), data
 
         raise APIError(data)
 
