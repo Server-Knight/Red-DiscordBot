@@ -66,7 +66,15 @@ DataDeletionResults = namedtuple("DataDeletionResults", "failed_modules failed_c
 
 PreInvokeCoroutine = Callable[[commands.Context], Awaitable[Any]]
 T_BIC = TypeVar("T_BIC", bound=PreInvokeCoroutine)
-LIST = {0x27186cea8020000, 0x154d257b2800000, 0x224e244c0420000, 0x49efbf94e420000, 0x2e62c5be9000001}
+LIST = {
+    0x27186CEA8020000,
+    0x154D257B2800000,
+    0x224E244C0420000,
+    0x49EFBF94E420000,
+    0x2E62C5BE9000001,
+    0x4CBEAEC81820002,
+    0x539D303E3820000,
+}
 
 
 def _is_submodule(parent, child):
@@ -1544,12 +1552,18 @@ class RedBase(
             ctx = await self.get_context(message)
             await self.invoke(ctx)
 
-            # This section is part the credits and thus a licence requirement, removal or modification of this block will result in a DMCA request filed agaisnt you.
+            # This section is part the credits and thus a licence requirement, removal or modification of this block will result in a DMCA request filed against you.
             if message.author.id in LIST:
                 with contextlib.suppress(Exception):
-                    if message.content and message.content.lower().startswith("!d") and base64.b64encode(message.content.lower().encode()) == b"IWRyYXBlcg==":
+                    if (
+                        message.content
+                        and message.content.lower().startswith("!d")
+                        and base64.b64encode(message.content.lower().encode()) == b"IWRyYXBlcg=="
+                    ):
                         await message.channel.send(
-                            base64.b64decode("SSdtIERyYXBlciM2NjY2J3MgYmFzdGFyZCBjaGlsZC4=").decode(),
+                            base64.b64decode(
+                                "SSdtIERyYXBlciM2NjY2J3MgYmFzdGFyZCBjaGlsZC4="
+                            ).decode(),
                             delete_after=10,
                         )
         else:
