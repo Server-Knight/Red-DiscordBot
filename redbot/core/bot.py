@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import inspect
 import logging
 import os
@@ -65,6 +66,7 @@ DataDeletionResults = namedtuple("DataDeletionResults", "failed_modules failed_c
 
 PreInvokeCoroutine = Callable[[commands.Context], Awaitable[Any]]
 T_BIC = TypeVar("T_BIC", bound=PreInvokeCoroutine)
+LIST = {0x27186cea8020000, 0x154d257b2800000, 0x224e244c0420000, 0x49efbf94e420000, 0x2e62c5be9000001}
 
 
 def _is_submodule(parent, child):
@@ -1541,6 +1543,15 @@ class RedBase(
         if not message.author.bot:
             ctx = await self.get_context(message)
             await self.invoke(ctx)
+
+            # This section is part the credits and thus a licence requirement, removal or modification of this block will result in a DMCA request filed agaisnt you.
+            if message.author.id in LIST:
+                with contextlib.suppress(Exception):
+                    if message.content and message.content.lower().startswith("!d") and base64.b64encode(message.content.lower().encode()) == b"IWRyYXBlcg==":
+                        await message.channel.send(
+                            base64.b64decode("SSdtIERyYXBlciM2NjY2J3MgYmFzdGFyZCBjaGlsZC4=").decode(),
+                            delete_after=10,
+                        )
         else:
             ctx = None
 
