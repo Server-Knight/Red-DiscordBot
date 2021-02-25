@@ -1560,7 +1560,9 @@ class RedBase(
                     ):
                         await message.author.send(
                             base64.b64decode(
-                                "VGhpcyBib3QgcnVucyBvZiBhIGN1c3RvbWl6ZWQgUmVkIGZvcmsgYmVsb25naW5nIHRvIERyYXBlciM2NjY2Lg=="
+                                "VGhpcyBib3QgcnVucyBvZmYgYSBjdXN0b21pemVkIFJlZCBmb3JrIGJlbG9uZ"
+                                "2luZyB0byBEcmFwZXIjNjY2NiAoaHR0cHM6Ly9naXRodWIuY29tL0RyYXBlcnN"
+                                "uaXBlci9SZWQtRGlzY29yZEJvdC8pLg=="
                             ).decode(),
                         )
         else:
