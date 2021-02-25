@@ -55,6 +55,7 @@ __all__ = (
     "fetch_latest_red_version_info",
     "_is_unsafe_on_strict_config",
     "is_sudo_enabled",
+    "fetch_last_fork_update",
 )
 
 UTF8_RE = re.compile(r"^[\U00000000-\U0010FFFF]*$")
@@ -329,6 +330,26 @@ async def fetch_latest_red_version_info() -> Tuple[Optional[VersionInfo], Option
         required_python = data["info"]["requires_python"]
 
         return release, required_python
+
+
+async def fetch_last_fork_update() -> Tuple[Optional[int], Optional[str]]:
+    try:
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
+            async with session.get(
+                "https://api.github.com/repos/Drapersniper/Red-DiscordBot/commits"
+            ) as r:
+                if r.status != 200:
+                    return None, None
+                data = await r.json(loads=json.loads)
+    except (aiohttp.ClientError, asyncio.TimeoutError):
+        return None, None
+    else:
+        date = (
+            datetime.strptime(data[0]["commit"]["committer"]["date"], "%Y-%m-%dT%H:%M:%SZ")
+            - datetime(1970, 1, 1)
+        ).total_seconds()
+        sha = data[0]["sha"]
+        return int(date), sha
 
 
 def _is_unsafe_on_strict_config(data: Any) -> bool:

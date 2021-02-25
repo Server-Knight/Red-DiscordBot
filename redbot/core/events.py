@@ -25,6 +25,7 @@ from .. import __version__ as red_version, version_info as red_version_info
 from . import commands
 from .config import get_latest_confs
 from .utils._internal_utils import (
+    fetch_last_fork_update,
     fuzzy_command_search,
     format_fuzzy_results,
     expected_version,
@@ -105,6 +106,7 @@ def init_events(bot, cli_flags):
             table_counts.add_row("Unique Users", str(users))
 
         outdated_red_message = ""
+        fork_outdated = False
         rich_outdated_message = ""
         with contextlib.suppress(aiohttp.ClientError, asyncio.TimeoutError):
             pypi_version, py_version_req = await fetch_latest_red_version_info()
@@ -168,6 +170,19 @@ def init_events(bot, cli_flags):
                         "#support channel in <https://discord.gg/red>"
                     ).format(py_version=current_python, req_py=py_version_req)
                 outdated_red_message += extra_update
+            try:
+                date, sha = await fetch_last_fork_update()
+            except:
+                sha = None
+            if sha:
+                async with bot._config.all() as global_data:
+                    last_fork_sha = global_data["last_fork_sha"]
+                    if sha != last_fork_sha:
+                        fork_outdated = True
+                        global_data["last_fork_sha"] = sha
+                        global_data["last_fork_update"] = date
+                    else:
+                        fork_outdated = False
 
         rich_console = rich.get_console()
         rich_console.print(INTRO, style="red", markup=False, highlight=False)
@@ -204,6 +219,34 @@ def init_events(bot, cli_flags):
         bot._red_ready.set()
         if outdated_red_message:
             await bot.send_to_owners(outdated_red_message)
+        if fork_outdated:
+            await bot.send_to_owners(
+                "Draper's Fork has been updated, changes can be seen here "
+                "https://github.com/Drapersniper/Red-DiscordBot/commits/V3/edge"
+            )
+        asyncio.create_task(_fork_update_task())
+
+    async def _fork_update_task():
+        while True:
+            try:
+                date, sha = await fetch_last_fork_update()
+                if sha:
+                    async with bot._config.all() as global_data:
+                        last_fork_sha = global_data["last_fork_sha"]
+                        last_fork_update = global_data["last_fork_update"]
+                        if last_fork_sha != sha and date > last_fork_update + 3600:
+                            await bot.send_to_owners(
+                                "Draper's Fork has been updated, changes can be seen here "
+                                "https://github.com/Drapersniper/Red-DiscordBot/commits/V3/edge"
+                            )
+                            global_data["last_fork_sha"] = sha
+                            global_data["last_fork_update"] = date
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                log.exception("Error running fork update check task.")
+            finally:
+                await asyncio.sleep(600)
 
     @bot.event
     async def on_command_completion(ctx: commands.Context):

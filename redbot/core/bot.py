@@ -132,6 +132,8 @@ class RedBase(
         )
         self._last_exception = None
         self._config.register_global(
+            last_fork_sha=None,
+            last_fork_update=None,
             token=None,
             prefix=[],
             packages=[],
