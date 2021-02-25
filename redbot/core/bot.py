@@ -134,6 +134,7 @@ class RedBase(
         self._config.register_global(
             last_fork_sha=None,
             last_fork_update=None,
+            fork_update_toggle=True,
             token=None,
             prefix=[],
             packages=[],

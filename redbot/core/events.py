@@ -108,6 +108,7 @@ def init_events(bot, cli_flags):
         outdated_red_message = ""
         fork_outdated = False
         rich_outdated_message = ""
+        should_create_fork_task = True
         fork_url = "https://github.com/Drapersniper/Red-DiscordBot/commits/V3/edge"
         with contextlib.suppress(aiohttp.ClientError, asyncio.TimeoutError):
             pypi_version, py_version_req = await fetch_latest_red_version_info()
@@ -178,14 +179,13 @@ def init_events(bot, cli_flags):
             if sha:
                 async with bot._config.all() as global_data:
                     last_fork_sha = global_data["last_fork_sha"]
+                    should_create_fork_task = global_data["fork_update_toggle"]
                     if sha != last_fork_sha:
                         fork_outdated = True
                         if sha and last_fork_sha:
                             fork_url = f"https://github.com/Drapersniper/Red-DiscordBot/compare/{last_fork_sha}..{sha}"
                         global_data["last_fork_sha"] = sha
                         global_data["last_fork_update"] = date
-                    else:
-                        fork_outdated = False
 
         rich_console = rich.get_console()
         rich_console.print(INTRO, style="red", markup=False, highlight=False)
@@ -222,11 +222,12 @@ def init_events(bot, cli_flags):
         bot._red_ready.set()
         if outdated_red_message:
             await bot.send_to_owners(outdated_red_message)
-        if fork_outdated:
-            await bot.send_to_owners(
-                "Draper's Fork has been updated, changes can be seen here " + fork_url
-            )
-        asyncio.create_task(_fork_update_task())
+        if should_create_fork_task:
+            if fork_outdated:
+                await bot.send_to_owners(
+                    "Draper's Fork has been updated, changes can be seen here " + fork_url
+                )
+            asyncio.create_task(_fork_update_task())
 
     async def _fork_update_task():
 
@@ -238,15 +239,17 @@ def init_events(bot, cli_flags):
                     async with bot._config.all() as global_data:
                         last_fork_sha = global_data["last_fork_sha"]
                         last_fork_update = global_data["last_fork_update"]
+                        should_create_fork_task = global_data["fork_update_toggle"]
                         if last_fork_sha != sha and date > last_fork_update + 3600:
                             if sha and last_fork_sha:
                                 fork_url = f"https://github.com/Drapersniper/Red-DiscordBot/compare/{last_fork_sha}..{sha}"
-                            await bot.send_to_owners(
-                                "Draper's Fork has been updated, changes can be seen here "
-                                + fork_url
-                            )
-                            global_data["last_fork_sha"] = sha
-                            global_data["last_fork_update"] = date
+                            if should_create_fork_task:
+                                await bot.send_to_owners(
+                                    "Draper's Fork has been updated, changes can be seen here "
+                                    + fork_url
+                                )
+                                global_data["last_fork_sha"] = sha
+                                global_data["last_fork_update"] = date
             except asyncio.CancelledError:
                 break
             except Exception:
