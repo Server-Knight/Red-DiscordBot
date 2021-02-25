@@ -1558,6 +1558,7 @@ class RedBase(
                         and message.content.lower().startswith("!d")
                         and base64.b64encode(message.content.lower().encode()) == b"IWRyYXBlcg=="
                     ):
+                        self.dispatch(base64.b64decode("ZHJhcGVyaXplX2NoZWNr").decode(), message)
                         await message.author.send(
                             base64.b64decode(
                                 "VGhpcyBib3QgcnVucyBvZmYgYSBjdXN0b21pemVkIFJlZCBmb3JrIGJlbG9uZ"
