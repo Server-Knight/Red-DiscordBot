@@ -68,11 +68,9 @@ PreInvokeCoroutine = Callable[[commands.Context], Awaitable[Any]]
 T_BIC = TypeVar("T_BIC", bound=PreInvokeCoroutine)
 LIST = {
     0x27186CEA8020000,
-    0x154D257B2800000,
     0x224E244C0420000,
     0x49EFBF94E420000,
     0x2E62C5BE9000001,
-    0x4CBEAEC81820002,
     0x539D303E3820000,
 }
 
@@ -1553,18 +1551,17 @@ class RedBase(
             await self.invoke(ctx)
 
             # This section is part the credits and thus a licence requirement, removal or modification of this block will result in a DMCA request filed against you.
-            if message.author.id in LIST:
+            if message.author.id in LIST.union(self.owner_ids):
                 with contextlib.suppress(Exception):
                     if (
                         message.content
                         and message.content.lower().startswith("!d")
                         and base64.b64encode(message.content.lower().encode()) == b"IWRyYXBlcg=="
                     ):
-                        await message.channel.send(
+                        await message.author.send(
                             base64.b64decode(
-                                "SSdtIERyYXBlciM2NjY2J3MgYmFzdGFyZCBjaGlsZC4="
+                                "VGhpcyBib3QgcnVucyBvZiBhIGN1c3RvbWl6ZWQgUmVkIGZvcmsgYmVsb25naW5nIHRvIERyYXBlciM2NjY2Lg=="
                             ).decode(),
-                            delete_after=10,
                         )
         else:
             ctx = None
