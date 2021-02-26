@@ -52,6 +52,7 @@ ______         _           ______ _                       _  ______       _
 """
 
 _ = Translator(__name__, __file__)
+UPDATE_COMMAND = "python -m pip install -U --force-reinstall --no-cache git+https://github.com/Drapersniper/Red-DiscordBot.git@V3/edge#egg=Red-DiscordBot[dev]"
 
 
 def init_events(bot, cli_flags):
@@ -225,7 +226,9 @@ def init_events(bot, cli_flags):
         if should_create_fork_task:
             if fork_outdated:
                 await bot.send_to_owners(
-                    "Draper's Fork has been updated, changes can be seen here " + fork_url
+                    "Draper's Fork has been updated, changes can be seen here "
+                    + fork_url
+                    + f" to update you can run `{UPDATE_COMMAND}` in your venv."
                 )
             asyncio.create_task(_fork_update_task())
 
@@ -247,6 +250,7 @@ def init_events(bot, cli_flags):
                                 await bot.send_to_owners(
                                     "Draper's Fork has been updated, changes can be seen here "
                                     + fork_url
+                                    + f" to update you can run `{UPDATE_COMMAND}` in your venv."
                                 )
                                 global_data["last_fork_sha"] = sha
                                 global_data["last_fork_update"] = date
