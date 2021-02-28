@@ -309,7 +309,7 @@ class MixinMeta(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def _build_bundled_playlist(self) -> None:
+    async def _build_bundled_playlist(self, forced: bool = None) -> None:
         raise NotImplementedError()
 
     @abstractmethod
