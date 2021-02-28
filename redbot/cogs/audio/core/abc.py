@@ -309,6 +309,14 @@ class MixinMeta(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    async def _build_bundled_playlist(self) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def decode_track(self, track: str, decode_errors: str = "") -> MutableMapping:
+        raise NotImplementedError()
+
+    @abstractmethod
     async def can_manage_playlist(
         self, scope: str, playlist: "Playlist", ctx: commands.Context, user, guild
     ) -> bool:
