@@ -33,7 +33,7 @@ _ = Translator("Audio", Path(__file__))
 def before_breadcrumb(crumb, hint):
     if not any(
         x in crumb.get("category", "124151361363647136153")
-        for x in ["red.cogs.Audio", "red.core.RLL", "red.audio"]
+        for x in ["red.cogs.Audio", "red.core.RLL", "red.audio", "red.Audio"]
     ):
         return None
     return crumb
@@ -42,10 +42,20 @@ def before_breadcrumb(crumb, hint):
 def before_send(event, hint):
     if not any(
         x in event.get("logger", "124151361363647136153")
-        for x in ["red.cogs.Audio", "red.core.RLL", "red.audio"]
+        for x in ["red.cogs.Audio", "red.core.RLL", "red.audio", "red.Audio"]
     ):
         return None
     return event
+
+
+socket_log = logging.getLogger("red.core.RLL.socket")
+socket_log.setLevel(logging.DEBUG)
+ws_discord_log = logging.getLogger("red.Audio.WS.discord")
+ws_ll_log = logging.getLogger("red.Audio.WS.LLServer")
+ws_rll_log = logging.getLogger("red.Audio.WS.RLL")
+ws_discord_log.setLevel(logging.DEBUG)
+ws_ll_log.setLevel(logging.DEBUG)
+ws_rll_log.setLevel(logging.DEBUG)
 
 
 class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
