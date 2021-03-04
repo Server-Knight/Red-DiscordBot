@@ -31,13 +31,13 @@ _ = Translator("Audio", Path(__file__))
 
 
 def before_breadcrumb(crumb, hint):
-    if any(x in crumb.get("category", "None") for x in ["red.cogs.Audio", "red.core.RLL"]):
+    if not any(x in crumb.get("category", "124151361363647136153") for x in ["red.cogs.Audio", "red.core.RLL"]):
         return None
     return crumb
 
 
 def before_send(event, hint):
-    if any(x in event.get("logger", "None") for x in ["red.cogs.Audio", "red.core.RLL"]):
+    if not any(x in event.get("logger", "124151361363647136153") for x in ["red.cogs.Audio", "red.core.RLL"]):
         return None
     return event
 
