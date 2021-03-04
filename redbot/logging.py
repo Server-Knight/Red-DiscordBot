@@ -301,10 +301,6 @@ def init_logging(level: int, location: pathlib.Path, cli_flags: argparse.Namespa
     dpy_logger.setLevel(logging.WARNING)
     warnings_logger = logging.getLogger("py.warnings")
     warnings_logger.setLevel(logging.WARNING)
-    rll = logging.getLogger("red.core.RLL")
-    rll.setLevel(logging.DEBUG)
-    audio = logging.getLogger("red.cogs.Audio")
-    audio.setLevel(logging.DEBUG)
 
     rich_console = rich.get_console()
     rich.reconfigure(tab_size=4)
