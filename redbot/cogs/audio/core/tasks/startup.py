@@ -8,6 +8,7 @@ from typing import Optional
 
 import lavalink
 import sentry_sdk
+from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from redbot import version_info
@@ -51,10 +52,6 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
 
     async def initialize(self) -> None:
         await self.bot.wait_until_red_ready()
-        sentry_logging = LoggingIntegration(
-            level=logging.DEBUG,  # Capture info and above as breadcrumbs
-            event_level=logging.DEBUG,  # Send errors as events
-        )
 
         sentry_sdk.init(
             "https://9658d49ead2a4364b284b55f837ed657@sentry.draper.wtf/2",
@@ -63,8 +60,14 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
             server_name=f"{self.bot.user} - {self.bot.user.id}",
             before_breadcrumb=before_breadcrumb,
             before_send=before_send,
-            integrations=[sentry_logging],
-            max_breadcrumbs=200
+            integrations=[
+                AioHttpIntegration(),
+                LoggingIntegration(
+                    level=logging.DEBUG,  # Capture info and above as breadcrumbs
+                    event_level=logging.DEBUG,  # Send errors as events
+                ),
+            ],
+            max_breadcrumbs=200,
         )
         # Unlike most cases, we want the cache to exit before migration.
         try:
