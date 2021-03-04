@@ -7,7 +7,10 @@ from pathlib import Path
 from typing import Optional
 
 import lavalink
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 
+from redbot import version_info
 from redbot.core.data_manager import cog_data_path
 from redbot.core.i18n import Translator
 from redbot.core.utils import AsyncIter
@@ -26,6 +29,18 @@ log = logging.getLogger("red.cogs.Audio.cog.Tasks.startup")
 _ = Translator("Audio", Path(__file__))
 
 
+def before_breadcrumb(crumb, hint):
+    if any(x in crumb.get("category", "None") for x in ["red.core.RLL", "red.cogs.Audio"]):
+        return None
+    return crumb
+
+
+def before_send(event, hint):
+    if any(x in event.get("logger", "None") for x in ["red.core.RLL", "red.cogs.Audio"]):
+        return None
+    return event
+
+
 class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
     def start_up_task(self):
         # There has to be a task since this requires the bot to be ready
@@ -36,6 +51,21 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
 
     async def initialize(self) -> None:
         await self.bot.wait_until_red_ready()
+        sentry_logging = LoggingIntegration(
+            level=logging.DEBUG,  # Capture info and above as breadcrumbs
+            event_level=logging.DEBUG,  # Send errors as events
+        )
+
+        sentry_sdk.init(
+            "https://9658d49ead2a4364b284b55f837ed657@sentry.draper.wtf/2",
+            environment="dev",
+            release=str(version_info),
+            server_name=f"{self.bot.user} - {self.bot.user.id}",
+            before_breadcrumb=before_breadcrumb,
+            before_send=before_send,
+            integrations=[sentry_logging],
+            max_breadcrumbs=200
+        )
         # Unlike most cases, we want the cache to exit before migration.
         try:
             await self.maybe_message_all_owners()
