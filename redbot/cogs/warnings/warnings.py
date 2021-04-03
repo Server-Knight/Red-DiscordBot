@@ -320,7 +320,7 @@ class Warnings(commands.Cog):
     async def actionlist(self, ctx: commands.Context):
         """List all configured automated actions for Warnings."""
         guild = ctx.guild
-        data = await self.config.guild(guild).actions.all()
+        data = await self.config.guild(guild).actions()
         if not data:
             return await ctx.send(_("There are no actions configured!"))
         await SimpleHybridMenu(
