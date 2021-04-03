@@ -263,7 +263,12 @@ class DpyEvents(MixinMeta, metaclass=CompositeMetaClass):
             except (ValueError, KeyError, AttributeError):
                 pass
 
-        if member == member.guild.me and before.channel and after.channel and after.channel != before.channel:
+        if (
+            member == member.guild.me
+            and before.channel
+            and after.channel
+            and after.channel != before.channel
+        ):
             try:
                 player = lavalink.get_player(member.guild.id)
                 if player.is_playing:

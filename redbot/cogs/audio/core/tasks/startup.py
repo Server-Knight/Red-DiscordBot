@@ -47,6 +47,7 @@ def before_send(event, hint):
         return None
     return event
 
+
 rll = logging.getLogger("red.core.RLL")
 audio = logging.getLogger("red.cogs.Audio")
 socket_log = logging.getLogger("red.core.RLL.socket")
