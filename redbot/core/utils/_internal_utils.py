@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import tarfile
+import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import (
@@ -56,6 +57,7 @@ __all__ = (
     "_is_unsafe_on_strict_config",
     "is_sudo_enabled",
     "fetch_last_fork_update",
+    "deprecated_removed",
 )
 
 UTF8_RE = re.compile(r"^[\U00000000-\U0010FFFF]*$")
@@ -622,3 +624,19 @@ class ProxyCounter:
         return "ProxyCounter(cogs={}, counters={})".format(
             len(self.__counters), sum(len(v) for v in self.__counters.values())
         )
+
+
+def deprecated_removed(
+    deprecation_target: str,
+    deprecation_version: str,
+    minimum_days: int,
+    message: str = "",
+    stacklevel: int = 1,
+) -> None:
+    warnings.warn(
+        f"{deprecation_target} is deprecated since version {deprecation_version}"
+        " and will be removed in the first minor version that gets released"
+        f" after {minimum_days} days since deprecation. {message}",
+        DeprecationWarning,
+        stacklevel=stacklevel + 1,
+    )

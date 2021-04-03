@@ -412,8 +412,7 @@ class Warnings(commands.Cog):
             else:
                 title = _("Warning")
             em = discord.Embed(
-                title=title,
-                description=reason_type["description"],
+                title=title, description=reason_type["description"], color=await ctx.embed_colour()
             )
             em.add_field(name=_("Points"), value=str(reason_type["points"]))
             try:
@@ -441,8 +440,7 @@ class Warnings(commands.Cog):
             else:
                 title = _("Warning")
             em = discord.Embed(
-                title=title,
-                description=reason_type["description"],
+                title=title, description=reason_type["description"], color=await ctx.embed_colour()
             )
             em.add_field(name=_("Points"), value=str(reason_type["points"]))
             warn_channel = self.bot.get_channel(guild_settings["warn_channel"])
@@ -523,7 +521,9 @@ class Warnings(commands.Cog):
                     )
                 await ctx.send_interactive(
                     pagify(msg, shorten_by=58),
-                    box_lang=_("Warnings for {user}").format(user=user),
+                    box_lang=_("Warnings for {user}").format(
+                        user=user if isinstance(user, discord.Member) else user.id
+                    ),
                 )
 
     @commands.command()

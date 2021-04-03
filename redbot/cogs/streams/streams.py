@@ -977,6 +977,7 @@ class Streams(commands.Cog):
         stream._messages_cache.append(m)
 
     async def check_streams(self):
+        to_remove = []
         for stream in self.streams:
             try:
                 try:
@@ -999,6 +1000,10 @@ class Streams(commands.Cog):
                         data = {}
                         is_rerun = False
                         is_schedule = False
+                except StreamNotFound:
+                    log.info("Stream with name %s no longer exists. Removing...", stream.name)
+                    to_remove.append(stream)
+                    continue
                 except OfflineStream:
                     if not stream._messages_cache:
                         continue
@@ -1093,6 +1098,11 @@ class Streams(commands.Cog):
                         await self.save_streams()
             except Exception as e:
                 log.error("An error has occured with Streams. Please report it.", exc_info=e)
+
+        if to_remove:
+            for stream in to_remove:
+                self.streams.remove(stream)
+            await self.save_streams()
 
     async def _get_mention_str(
         self, guild: discord.Guild, channel: discord.TextChannel
