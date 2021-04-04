@@ -351,6 +351,7 @@ class Cleanup(commands.Cog):
 
         channel = ctx.channel
         author = ctx.author
+        before = None
 
         if message_id:
             try:
