@@ -54,6 +54,7 @@ socket_log = logging.getLogger("red.core.RLL.socket")
 ws_discord_log = logging.getLogger("red.Audio.WS.discord")
 ws_ll_log = logging.getLogger("red.Audio.WS.LLServer")
 ws_rll_log = logging.getLogger("red.Audio.WS.RLL")
+logging.getLogger("red.cogs.Audio.cog.Events.lavalink").setLevel(logging.DEBUG)
 ws_discord_log.setLevel(logging.DEBUG)
 ws_ll_log.setLevel(logging.DEBUG)
 ws_rll_log.setLevel(logging.DEBUG)
@@ -73,22 +74,22 @@ class StartUpTasks(MixinMeta, metaclass=CompositeMetaClass):
     async def initialize(self) -> None:
         await self.bot.wait_until_red_ready()
 
-        sentry_sdk.init(
-            "https://9658d49ead2a4364b284b55f837ed657@sentry.draper.wtf/2",
-            environment="dev",
-            release=str(version_info),
-            server_name=f"{self.bot.user} - {self.bot.user.id}",
-            before_breadcrumb=before_breadcrumb,
-            before_send=before_send,
-            integrations=[
-                AioHttpIntegration(),
-                LoggingIntegration(
-                    level=logging.DEBUG,  # Capture info and above as breadcrumbs
-                    event_level=logging.DEBUG,  # Send errors as events
-                ),
-            ],
-            max_breadcrumbs=200,
-        )
+        # sentry_sdk.init(
+        #     "https://9658d49ead2a4364b284b55f837ed657@sentry.draper.wtf/2",
+        #     environment="dev",
+        #     release=str(version_info),
+        #     server_name=f"{self.bot.user} - {self.bot.user.id}",
+        #     before_breadcrumb=before_breadcrumb,
+        #     before_send=before_send,
+        #     integrations=[
+        #         AioHttpIntegration(),
+        #         LoggingIntegration(
+        #             level=logging.DEBUG,  # Capture info and above as breadcrumbs
+        #             event_level=logging.DEBUG,  # Send errors as events
+        #         ),
+        #     ],
+        #     max_breadcrumbs=200,
+        # )
         # Unlike most cases, we want the cache to exit before migration.
         try:
             await self.maybe_message_all_owners()
