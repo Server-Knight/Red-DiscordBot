@@ -1,5 +1,7 @@
+import asyncio
 import contextlib
 import logging
+import time
 from dateutil.parser import parse as parse_time
 from random import choice
 from string import ascii_letters
@@ -57,10 +59,11 @@ class Stream:
     token_name: ClassVar[Optional[str]] = None
 
     def __init__(self, **kwargs):
+        self._bot = kwargs.pop("_bot")
         self.name = kwargs.pop("name", None)
         self.channels = kwargs.pop("channels", [])
         # self.already_online = kwargs.pop("already_online", False)
-        self._messages_cache = kwargs.pop("_messages_cache", [])
+        self.messages = kwargs.pop("messages", [])
         self.type = self.__class__.__name__
 
     async def is_online(self):
@@ -69,14 +72,24 @@ class Stream:
     def make_embed(self):
         raise NotImplementedError()
 
+    def iter_messages(self):
+        for msg_data in self.messages:
+            data = msg_data.copy()
+            # "guild" key might not exist for old config data (available since GH-4742)
+            if guild_id := msg_data.get("guild"):
+                guild = self._bot.get_guild(guild_id)
+                channel = guild and guild.get_channel(msg_data["channel"])
+            else:
+                channel = self._bot.get_channel(msg_data["channel"])
+            if channel is not None:
+                data["partial_message"] = channel.get_partial_message(data["message"])
+            yield data
+
     def export(self):
         data = {}
         for k, v in self.__dict__.items():
             if not k.startswith("_"):
                 data[k] = v
-        data["messages"] = []
-        for m in self._messages_cache:
-            data["messages"].append({"channel": m.channel.id, "message": m.id})
         return data
 
     def __repr__(self):
@@ -210,17 +223,21 @@ class YoutubeStream(Stream):
                 embed.timestamp = start_time
                 is_schedule = True
             else:
-                # repost message
+                # delete the message(s) about the stream schedule
                 to_remove = []
-                for message in self._messages_cache:
-                    if message.embeds[0].description is discord.Embed.Empty:
+                for msg_data in self.iter_messages():
+                    if not msg_data.get("is_schedule", False):
                         continue
-                    with contextlib.suppress(Exception):
-                        autodelete = await self._config.guild(message.guild).autodelete()
+                    partial_msg = msg_data["partial_message"]
+                    if partial_msg is not None:
+                        autodelete = await self._config.guild(partial_msg.guild).autodelete()
                         if autodelete:
-                            await message.delete()
-                    to_remove.append(message.id)
-                self._messages_cache = [x for x in self._messages_cache if x.id not in to_remove]
+                            with contextlib.suppress(discord.NotFound):
+                                await partial_msg.delete()
+                    to_remove.append(msg_data["message"])
+                self.messages = [
+                    data for data in self.messages if data["message"] not in to_remove
+                ]
         embed.set_author(name=channel_title)
         embed.set_image(url=rnd(thumbnail))
         embed.colour = 0x9255A5
@@ -283,53 +300,67 @@ class TwitchStream(Stream):
         self.id = kwargs.pop("id", None)
         self._client_id = kwargs.pop("token", None)
         self._bearer = kwargs.pop("bearer", None)
-        self.games = kwargs.pop("games", {})
+        self._rate_limit_resets: set = set()
+        self._rate_limit_remaining: int = 0
         super().__init__(**kwargs)
 
-    async def get_game_info_by_id(self, game_id: int):
-        header = {"Client-ID": str(self._client_id)}
-        if self._bearer is not None:
-            header = {**header, "Authorization": f"Bearer {self._bearer}"}
-        params = {"id": game_id}
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "https://api.twitch.tv/helix/games", headers=header, params=params
-            ) as r:
-                game_data = await r.json(encoding="utf-8")
-        if game_data:
-            return game_data
-        else:
-            return {}
+    async def wait_for_rate_limit_reset(self) -> None:
+        """Check rate limits in response header and ensure we're following them.
 
-    async def get_game_info_by_name(self, game_name: str):
+        From python-twitch-client and adaptated to asyncio from Trusty-cogs:
+        https://github.com/tsifrer/python-twitch-client/blob/master/twitch/helix/base.py
+        https://github.com/TrustyJAID/Trusty-cogs/blob/master/twitch/twitch_api.py
+        """
+        current_time = int(time.time())
+        self._rate_limit_resets = {x for x in self._rate_limit_resets if x > current_time}
+        if self._rate_limit_remaining == 0:
+
+            if self._rate_limit_resets:
+                reset_time = next(iter(self._rate_limit_resets))
+                # Calculate wait time and add 0.1s to the wait time to allow Twitch to reset
+                # their counter
+                wait_time = reset_time - current_time + 0.1
+                await asyncio.sleep(wait_time)
+
+    async def get_data(self, url: str, params: dict = {}) -> Tuple[Optional[int], dict]:
         header = {"Client-ID": str(self._client_id)}
         if self._bearer is not None:
-            header = {**header, "Authorization": f"Bearer {self._bearer}"}
-        params = {"name": game_name}
-        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
-            async with session.get(
-                "https://api.twitch.tv/helix/games", headers=header, params=params
-            ) as r:
-                game_data = await r.json(encoding="utf-8", loads=json.loads)
-        if game_data:
-            return game_data["data"]
-        else:
-            return []
+            header["Authorization"] = f"Bearer {self._bearer}"
+        await self.wait_for_rate_limit_reset()
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(url, headers=header, params=params, timeout=60) as resp:
+                    remaining = resp.headers.get("Ratelimit-Remaining")
+                    if remaining:
+                        self._rate_limit_remaining = int(remaining)
+                    reset = resp.headers.get("Ratelimit-Reset")
+                    if reset:
+                        self._rate_limit_resets.add(int(reset))
+
+                    if resp.status == 429:
+                        log.info(
+                            "Ratelimited. Trying again at %s.", datetime.fromtimestamp(int(reset))
+                        )
+                        resp.release()
+                        return await self.get_data(url)
+
+                    if resp.status != 200:
+                        return resp.status, {}
+
+                    return resp.status, await resp.json(encoding="utf-8")
+            except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
+                log.warning("Connection error occurred when fetching Twitch stream", exc_info=exc)
+                return None, {}
 
     async def is_online(self):
         if not self.id:
             self.id = await self.fetch_id()
 
         url = TWITCH_STREAMS_ENDPOINT
-        header = {"Client-ID": str(self._client_id)}
-        if self._bearer is not None:
-            header = {**header, "Authorization": f"Bearer {self._bearer}"}
         params = {"user_id": self.id}
 
-        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
-            async with session.get(url, headers=header, params=params) as r:
-                data = await r.json(encoding="utf-8", loads=json.loads)
-        if r.status == 200:
+        code, data = await self.get_data(url, params)
+        if code == 200:
             if not data["data"]:
                 raise OfflineStream()
             self.name = data["data"][0]["user_name"]
@@ -342,26 +373,22 @@ class TwitchStream(Stream):
 
             game_id = data["game_id"]
             if game_id:
-                game_data = await self.get_game_info_by_id(game_id)
+                __, game_data = await self.get_data(
+                    "https://api.twitch.tv/helix/games", {"id": game_id}
+                )
                 if game_data:
                     game_data = game_data["data"][0]
                     data["game_name"] = game_data["name"]
-            params = {"to_id": self.id}
-            async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
-                async with session.get(
-                    "https://api.twitch.tv/helix/users/follows", headers=header, params=params
-                ) as r:
-                    user_data = await r.json(encoding="utf-8", loads=json.loads)
+            __, user_data = await self.get_data(
+                "https://api.twitch.tv/helix/users/follows", {"to_id": self.id}
+            )
             if user_data:
                 followers = user_data["total"]
                 data["followers"] = followers
 
-            params = {"id": self.id}
-            async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
-                async with session.get(
-                    "https://api.twitch.tv/helix/users", headers=header, params=params
-                ) as r:
-                    user_profile_data = await r.json(encoding="utf-8", loads=json.loads)
+            __, user_profile_data = await self.get_data(
+                "https://api.twitch.tv/helix/users", {"id": self.id}
+            )
             if user_profile_data:
                 profile_image_url = user_profile_data["data"][0]["profile_image_url"]
                 data["profile_image_url"] = profile_image_url
@@ -369,10 +396,10 @@ class TwitchStream(Stream):
                 data["login"] = user_profile_data["data"][0]["login"]
 
             is_rerun = False
-            return self.make_embed(data), data, is_rerun
-        elif r.status == 400:
+            return self.make_embed(data), is_rerun
+        elif code == 400:
             raise InvalidTwitchCredentials()
-        elif r.status == 404:
+        elif code == 404:
             raise StreamNotFound()
         else:
             raise APIError(data)
@@ -384,17 +411,15 @@ class TwitchStream(Stream):
         url = TWITCH_ID_ENDPOINT
         params = {"login": self.name}
 
-        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
-            async with session.get(url, headers=header, params=params) as r:
-                data = await r.json(loads=json.loads)
+        status, data = await self.get_data(url, params)
 
-        if r.status == 200:
+        if status == 200:
             if not data["data"]:
                 raise StreamNotFound()
             return data["data"][0]["id"]
-        elif r.status == 400:
+        elif status == 400:
             raise StreamNotFound()
-        elif r.status == 401:
+        elif status == 401:
             raise InvalidTwitchCredentials()
         else:
             raise APIError(data)
