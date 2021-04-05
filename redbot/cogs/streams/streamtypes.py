@@ -302,6 +302,7 @@ class TwitchStream(Stream):
         self._bearer = kwargs.pop("bearer", None)
         self._rate_limit_resets: set = set()
         self._rate_limit_remaining: int = 0
+        self.games = kwargs.pop("games", {})
         super().__init__(**kwargs)
 
     async def wait_for_rate_limit_reset(self) -> None:
@@ -321,6 +322,36 @@ class TwitchStream(Stream):
                 # their counter
                 wait_time = reset_time - current_time + 0.1
                 await asyncio.sleep(wait_time)
+
+    async def get_game_info_by_id(self, game_id: int):
+        header = {"Client-ID": str(self._client_id)}
+        if self._bearer is not None:
+            header = {**header, "Authorization": f"Bearer {self._bearer}"}
+        params = {"id": game_id}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.twitch.tv/helix/games", headers=header, params=params
+            ) as r:
+                game_data = await r.json(encoding="utf-8")
+        if game_data:
+            return game_data
+        else:
+            return {}
+
+    async def get_game_info_by_name(self, game_name: str):
+        header = {"Client-ID": str(self._client_id)}
+        if self._bearer is not None:
+            header = {**header, "Authorization": f"Bearer {self._bearer}"}
+        params = {"name": game_name}
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
+            async with session.get(
+                "https://api.twitch.tv/helix/games", headers=header, params=params
+            ) as r:
+                game_data = await r.json(encoding="utf-8", loads=json.loads)
+        if game_data:
+            return game_data["data"]
+        else:
+            return []
 
     async def get_data(self, url: str, params: dict = {}) -> Tuple[Optional[int], dict]:
         header = {"Client-ID": str(self._client_id)}
@@ -396,7 +427,7 @@ class TwitchStream(Stream):
                 data["login"] = user_profile_data["data"][0]["login"]
 
             is_rerun = False
-            return self.make_embed(data), is_rerun
+            return self.make_embed(data), data, is_rerun
         elif code == 400:
             raise InvalidTwitchCredentials()
         elif code == 404:
