@@ -16,6 +16,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import NoReturn
 
+from redbot import aiohttp
+
 import discord
 
 # Set the event loop policies here so any subsequent `new_event_loop()`
@@ -26,7 +28,6 @@ from redbot import _update_event_loop_policy, __version__, json
 _update_event_loop_policy()
 
 import redbot.logging
-from redbot import aiohttp
 from redbot.core.bot import Red, ExitCodes
 from redbot.core.cli import interactive_config, confirm, parse_cli_flags
 from redbot.setup import get_data_dir, get_name, save_config

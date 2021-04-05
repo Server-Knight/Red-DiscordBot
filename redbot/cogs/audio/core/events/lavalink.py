@@ -63,7 +63,7 @@ class LavalinkEvents(MixinMeta, metaclass=CompositeMetaClass):
             deafen = guild_data["auto_deafen"]
             event_channel_id = extra.get("channelID")
             _error_code = extra.get("code")
-            if _error_code in [1000, 4014] or not guild:
+            if _error_code in [1000] or not guild:
                 if _error_code == 1000:
                     await player.resume(player.current, start=player.position, replace=False)
                 return
