@@ -15,11 +15,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import (
     Any,
+    AsyncIterable,
     AsyncIterator,
     Awaitable,
     Callable,
     Dict,
     Generator,
+    Iterable,
     Iterator,
     List,
     NoReturn,
