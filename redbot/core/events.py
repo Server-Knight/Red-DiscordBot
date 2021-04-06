@@ -228,7 +228,7 @@ def init_events(bot, cli_flags):
         bot._color = discord.Colour(await bot._config.color())
         bot._red_ready.set()
         if outdated_red_message:
-            await bot.send_to_owners_with_prefix_replaced(outdated_red_message)
+            await send_to_owners_with_prefix_replaced(bot, outdated_red_message)
         if should_create_fork_task:
             if fork_outdated:
                 await bot.send_to_owners(
