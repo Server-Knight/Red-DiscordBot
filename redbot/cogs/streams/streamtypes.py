@@ -358,7 +358,7 @@ class TwitchStream(Stream):
         if self._bearer is not None:
             header["Authorization"] = f"Bearer {self._bearer}"
         await self.wait_for_rate_limit_reset()
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
             try:
                 async with session.get(url, headers=header, params=params, timeout=60) as resp:
                     remaining = resp.headers.get("Ratelimit-Remaining")
@@ -378,7 +378,7 @@ class TwitchStream(Stream):
                     if resp.status != 200:
                         return resp.status, {}
 
-                    return resp.status, await resp.json(encoding="utf-8")
+                    return resp.status, await resp.json(encoding="utf-8", loads=json.loads)
             except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as exc:
                 log.warning("Connection error occurred when fetching Twitch stream", exc_info=exc)
                 return None, {}

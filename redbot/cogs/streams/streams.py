@@ -288,7 +288,7 @@ class Streams(commands.Cog):
             )
         else:
             if isinstance(info, tuple):
-                embed, is_rerun = info
+                embed, is_rerun = info[0], info[-1]
                 ignore_reruns = await self.config.guild(ctx.channel.guild).ignore_reruns()
                 if ignore_reruns and is_rerun:
                     await ctx.send(_("That user is offline."))

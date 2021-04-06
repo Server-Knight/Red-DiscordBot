@@ -51,7 +51,11 @@ from .settings_caches import (
 )
 from .rpc import RPCMixin
 from .utils import common_filters, AsyncIter
-from .utils._internal_utils import deprecated_removed, send_to_owners_with_prefix_replaced, ProxyCounter
+from .utils._internal_utils import (
+    deprecated_removed,
+    send_to_owners_with_prefix_replaced,
+    ProxyCounter,
+)
 
 CUSTOM_GROUPS = "CUSTOM_GROUPS"
 COMMAND_SCOPE = "COMMAND"
