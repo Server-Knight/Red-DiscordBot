@@ -130,30 +130,67 @@ class ModLog(commands.Cog):
     @commands.guild_only()
     async def casesfor(self, ctx: commands.Context, *, member: Union[discord.Member, int]):
         """Display cases for the specified member."""
-        try:
-            if isinstance(member, int):
-                cases = await modlog.get_cases_for_member(
-                    bot=ctx.bot, guild=ctx.guild, member_id=member
+        async with ctx.typing():
+            try:
+                if isinstance(member, int):
+                    cases = await modlog.get_cases_for_member(
+                        bot=ctx.bot, guild=ctx.guild, member_id=member
+                    )
+                else:
+                    cases = await modlog.get_cases_for_member(
+                        bot=ctx.bot, guild=ctx.guild, member=member
+                    )
+            except discord.NotFound:
+                return await ctx.send(_("That user does not exist."))
+            except discord.HTTPException:
+                return await ctx.send(
+                    _("Something unexpected went wrong while fetching that user by ID.")
                 )
-            else:
-                cases = await modlog.get_cases_for_member(
-                    bot=ctx.bot, guild=ctx.guild, member=member
-                )
-        except discord.NotFound:
-            return await ctx.send(_("That user does not exist."))
-        except discord.HTTPException:
-            return await ctx.send(
-                _("Something unexpected went wrong while fetching that user by ID.")
-            )
 
-        if not cases:
-            return await ctx.send(_("That user does not have any cases."))
+            if not cases:
+                return await ctx.send(_("That user does not have any cases."))
 
         await SimpleHybridMenu(
             source=CasesForSource(cases),
             cog=self,
             delete_message_after=True,
         ).start(ctx=ctx, wait=False)
+
+    @commands.command()
+    @commands.guild_only()
+    async def listcases(self, ctx: commands.Context, *, member: Union[discord.Member, int]):
+        """List cases for the specified member."""
+        async with ctx.typing():
+            try:
+                if isinstance(member, int):
+                    cases = await modlog.get_cases_for_member(
+                        bot=ctx.bot, guild=ctx.guild, member_id=member
+                    )
+                else:
+                    cases = await modlog.get_cases_for_member(
+                        bot=ctx.bot, guild=ctx.guild, member=member
+                    )
+            except discord.NotFound:
+                return await ctx.send(_("That user does not exist."))
+            except discord.HTTPException:
+                return await ctx.send(
+                    _("Something unexpected went wrong while fetching that user by ID.")
+                )
+            if not cases:
+                return await ctx.send(_("That user does not have any cases."))
+
+            rendered_cases = []
+            message = ""
+            for case in cases:
+                message += _("{case}\n**Timestamp:** {timestamp}\n\n").format(
+                    case=await case.message_content(embed=False),
+                    timestamp=datetime.utcfromtimestamp(case.created_at).strftime(
+                        "%Y-%m-%d %H:%M:%S UTC"
+                    ),
+                )
+            for page in pagify(message, ["\n\n", "\n"], priority=True):
+                rendered_cases.append(page)
+        await menu(ctx, rendered_cases, DEFAULT_CONTROLS)
 
     @commands.command()
     @commands.guild_only()
