@@ -18,8 +18,8 @@ from redbot.core.utils.chat_formatting import box, humanize_number
 from redbot.core.bot import Red
 from redbot.core.utils._dpy_menus_utils import SimpleHybridMenu
 
-from .menus import LeaderboardSource
 from .converters import positive_int
+from .menus import LeaderboardSource
 
 T_ = Translator("Economy", __file__)
 
@@ -556,7 +556,7 @@ class Economy(commands.Cog):
 
     @commands.command()
     @guild_only_check()
-    async def leaderboard(self, ctx: commands.Context, top: int = 10, show_global: bool = False):
+    async def leaderboard(self, ctx: commands.Context, show_global: bool = False):
         """Print the leaderboard.
 
         Defaults to top 10.

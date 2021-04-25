@@ -45,7 +45,7 @@ class ActionListSource(menus.ListPageSource):
         if await menu.ctx.embed_requested():
             message = discord.Embed(
                 title=_("Action: {name}").format(name=entry["action_name"]),
-                color=await menu.ctx.embed_colour(),
+                colour=await menu.ctx.embed_colour(),
             )
             message.add_field(name=_("Points"), value="{}".format(entry["points"]), inline=False)
             message.add_field(

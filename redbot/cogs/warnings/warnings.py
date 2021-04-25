@@ -19,6 +19,7 @@ from redbot.core.commands import UserInputOptional
 from redbot.core.i18n import Translator, cog_i18n
 from redbot.core.utils.chat_formatting import pagify
 from redbot.core.utils._dpy_menus_utils import SimpleHybridMenu
+
 from .menus import ReasonListSource, ActionListSource
 
 _ = Translator("Warnings", __file__)
@@ -320,7 +321,7 @@ class Warnings(commands.Cog):
     async def actionlist(self, ctx: commands.Context):
         """List all configured automated actions for Warnings."""
         guild = ctx.guild
-        data = await self.config.guild(guild).actions()
+        data = await self.config.guild(guild).actions.all()
         if not data:
             return await ctx.send(_("There are no actions configured!"))
         await SimpleHybridMenu(
