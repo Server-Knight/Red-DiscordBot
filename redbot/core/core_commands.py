@@ -3668,7 +3668,8 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             - `<users...>` - The user or users to remove from the allowlist.
         """
         uids = {getattr(user, "id", user) for user in users}
-        await self.bot.remove_from_allowlist(uids, None)
+        await self.bot.remove_from_allowlist_raw(uids, None)
+
         if len(uids) > 1:
             await ctx.send(_("Users have been removed from the allowlist."))
         else:
@@ -3765,6 +3766,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         """
         uids = {getattr(user, "id", user) for user in users}
         await self.bot.remove_from_blocklist_raw(uids, None)
+
         if len(uids) > 1:
             await ctx.send(_("Users have been removed from the blocklist."))
         else:
@@ -3886,7 +3888,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
                         "remove your ability to run commands."
                     )
                 )
-        await self.bot.remove_from_allowlist(uids, ctx.guild.id)
+        await self.bot.remove_from_allowlist_raw(uids, ctx.guild.id)
 
         if len(uids) > 1:
             await ctx.send(_("Users and/or roles have been removed from the server allowlist."))

@@ -530,3 +530,37 @@ def init_events(bot, cli_flags):
     @bot.event
     async def on_filter_message_delete(message, hits):
         bot.counter._inc_core_raw("Red_Core", "on_filter_message_delete")
+
+
+def _get_startup_screen_specs():
+    """Get specs for displaying the startup screen on stdout.
+
+    This is so we don't get encoding errors when trying to print unicode
+    emojis to stdout (particularly with Windows Command Prompt).
+
+    Returns
+    -------
+    `tuple`
+        Tuple in the form (`str`, `str`, `bool`) containing (in order) the
+        on symbol, off symbol and whether or not the border should be pure ascii.
+
+    """
+    encoder = codecs.getencoder(sys.stdout.encoding)
+    check_mark = "\N{SQUARE ROOT}"
+    try:
+        encoder(check_mark)
+    except UnicodeEncodeError:
+        on_symbol = "[X]"
+        off_symbol = "[ ]"
+    else:
+        on_symbol = check_mark
+        off_symbol = "X"
+
+    try:
+        encoder("┌┐└┘─│")  # border symbols
+    except UnicodeEncodeError:
+        ascii_border = True
+    else:
+        ascii_border = False
+
+    return on_symbol, off_symbol, ascii_border

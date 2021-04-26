@@ -908,9 +908,9 @@ async def create_case(
         )
         await _config.custom(_CASES, str(guild.id), str(next_case_number)).set(case.to_json())
         await _config.guild(guild).latest_case_number.set(next_case_number)
-    bot.counter._inc_core_raw("Red_Core", "on_modlog_case_create")
 
     await set_contextual_locales_from_guild(bot, guild)
+    bot.counter._inc_core_raw("Red_Core", "on_modlog_case_create")
     bot.dispatch("modlog_case_create", case)
     try:
         mod_channel = await get_modlog_channel(case.guild)
