@@ -48,12 +48,12 @@ def before_send(event, hint):
     return event
 
 
-# rll = logging.getLogger("red.core.RLL")
-# audio = logging.getLogger("red.cogs.Audio")
-# socket_log = logging.getLogger("red.core.RLL.socket")
-# ws_discord_log = logging.getLogger("red.Audio.WS.discord")
-# ws_ll_log = logging.getLogger("red.Audio.WS.LLServer")
-# ws_rll_log = logging.getLogger("red.Audio.WS.RLL")
+rll = logging.getLogger("red.core.RLL")
+audio = logging.getLogger("red.cogs.Audio")
+socket_log = logging.getLogger("red.core.RLL.socket")
+ws_discord_log = logging.getLogger("red.Audio.WS.discord")
+ws_ll_log = logging.getLogger("red.Audio.WS.LLServer")
+ws_rll_log = logging.getLogger("red.Audio.WS.RLL")
 # logging.getLogger("red.cogs.Audio.cog.Events.lavalink").setLevel(logging.DEBUG)
 # ws_discord_log.setLevel(logging.DEBUG)
 # ws_ll_log.setLevel(logging.DEBUG)
