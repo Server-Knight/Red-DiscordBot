@@ -9,6 +9,8 @@ import sys
 import contextlib
 import weakref
 from collections import namedtuple
+from contextvars import ContextVar
+from copy import copy
 from datetime import datetime
 from enum import IntEnum
 from importlib.machinery import ModuleSpec
@@ -20,6 +22,7 @@ from typing import (
     List,
     Dict,
     NoReturn,
+    FrozenSet,
     Set,
     TypeVar,
     Callable,
@@ -228,22 +231,38 @@ class RedBase(
         if "command_prefix" not in kwargs:
             kwargs["command_prefix"] = prefix_manager
 
-        if "owner_id" in kwargs:
-            raise RuntimeError("Red doesn't accept owner_id kwarg, use owner_ids instead.")
-
         if "intents" not in kwargs:
             intents = discord.Intents.all()
             for intent_name in cli_flags.disable_intent:
                 setattr(intents, intent_name, False)
             kwargs["intents"] = intents
 
-        self._owner_id_overwrite = cli_flags.owner
+        # This keeps track of owners with elevated privileges in the different contexts.
+        # This is `None` if sudo functionality is disabled.
+        self._sudo_ctx_var: Optional[ContextVar] = None
+
+        if "owner_id" in kwargs:
+            raise RuntimeError("Red doesn't accept owner_id kwarg, use owner_ids instead.")
+
+        # This is owner ID overwrite, which when set is used *instead of* owner of a non-team app.
+        # For teams, it is just appended to the set of all owner IDs.
+        # This is set to `--owner` *or* if the flag is not passed, to `self._config.owner()`
+        self._owner_id_overwrite: Optional[int] = cli_flags.owner
+        # These are IDs of ALL owners, whether they currently have elevated privileges or not
+        self._all_owner_ids: FrozenSet[int] = frozenset()
+        # These are IDs of the owners, that currently have their privileges elevated globally.
+        # If sudo functionality is not enabled, this will remain empty throughout bot's lifetime.
+        self._elevated_owner_ids: FrozenSet[int] = frozenset()
 
         if "owner_ids" in kwargs:
-            kwargs["owner_ids"] = set(kwargs["owner_ids"])
-        else:
-            kwargs["owner_ids"] = set()
-        kwargs["owner_ids"].update(cli_flags.co_owner)
+            self._all_owner_ids = frozenset(kwargs.pop("owner_ids"))
+        self._all_owner_ids = self._all_owner_ids.union(cli_flags.co_owner)
+
+        # ensure that d.py doesn't run into AttributeError when trying to set `self.owner_ids`
+        kwargs["owner_ids"] = self._all_owner_ids
+
+        # to prevent multiple calls to app info in `is_owner()`
+        self._app_owners_fetched = False
 
         if "command_not_found" not in kwargs:
             kwargs["command_not_found"] = "Command {} not found.\n{}"
@@ -265,25 +284,57 @@ class RedBase(
         self._main_dir = bot_dir
         self._cog_mgr = CogManager()
         self._use_team_features = cli_flags.use_team_features
-        self._sudo_enabled = cli_flags.enable_sudo
-        if self._sudo_enabled:
-            self._true_owner_ids = kwargs.pop("owner_ids", set())
 
-        # to prevent multiple calls to app info in `is_owner()`
-        self._app_owners_fetched = False
         super().__init__(*args, help_command=None, **kwargs)
+        # This MUST happen *after* d.py's __init__ is called as otherwise,
+        # access to `self.owner_ids` property would have it set the value of
+        # ContextVar in current context (which is a global context as we're not in any async task)
+        if cli_flags.enable_sudo:
+            self._sudo_ctx_var = ContextVar("SudoOwners")
+
         # Do not manually use the help formatter attribute here, see `send_help_for`,
         # for a documented API. The internals of this object are still subject to change.
         self._help_formatter = commands.help.RedHelpFormatter()
         self.add_command(commands.help.red_help)
-        if self._sudo_enabled is False:
-            self._true_owner_ids = self.owner_ids
 
         self._permissions_hooks: List[commands.CheckPredicate] = []
         self._red_ready = asyncio.Event()
         self._red_before_invoke_objs: Set[PreInvokeCoroutine] = set()
 
         self._deletion_requests: MutableMapping[int, asyncio.Lock] = weakref.WeakValueDictionary()
+
+    @property
+    def all_owner_ids(self) -> FrozenSet[int]:
+        """
+        IDs of ALL owners regardless of their elevation status.
+
+        If you're doing privilege checks, use `owner_ids` instead.
+        This attribute is meant to be used for things
+        that actually need to get a full list of owners for informational purposes.
+        """
+        # XXX: rename to `all_owner_ids` perhaps?
+        return self._all_owner_ids
+
+    @property
+    def owner_ids(self) -> FrozenSet[int]:
+        """
+        IDs of owners that are elevated in current context.
+
+        You should NEVER try to set to this attribute.
+
+        This should be used for any privilege checks.
+        If sudo functionality is disabled, this will be equivalent to `all_owner_ids`.
+        """
+        if self._sudo_ctx_var is None:
+            return self._all_owner_ids
+        return self._sudo_ctx_var.get(self._elevated_owner_ids)
+
+    @owner_ids.setter
+    def owner_ids(self, value) -> NoReturn:
+        # this if is needed so that d.py's __init__ can "set" to `owner_ids` successfully
+        if self._sudo_ctx_var is None and self._all_owner_ids is value:
+            return  # type: ignore[misc]
+        raise AttributeError("can't set attribute")
 
     def set_help_formatter(self, formatter: commands.help.HelpFormatterABC):
         """
@@ -1221,7 +1272,7 @@ class RedBase(
         if self._owner_id_overwrite is None:
             self._owner_id_overwrite = await self._config.owner()
         if self._owner_id_overwrite is not None:
-            self._true_owner_ids.add(self._owner_id_overwrite)
+            self._all_owner_ids |= {self._owner_id_overwrite}
 
         i18n_locale = await self._config.locale()
         i18n.set_locale(i18n_locale)
@@ -1430,11 +1481,11 @@ class RedBase(
             if app.team:
                 if self._use_team_features:
                     ids = {m.id for m in app.team.members}
-                    self._true_owner_ids.update(ids)
+                    self._all_owner_ids |= ids
                     ret = user.id in ids
             elif self._owner_id_overwrite is None:
                 owner_id = app.owner.id
-                self._true_owner_ids.add(owner_id)
+                self._all_owner_ids |= {owner_id}
                 ret = user.id == owner_id
             self._app_owners_fetched = True
 
@@ -1612,9 +1663,15 @@ class RedBase(
         messages,  without the overhead of additional get_context calls
         per cog.
         """
-        if not message.author.bot:
-            ctx = await self.get_context(message)
-            await self.invoke(ctx)
+        if self._sudo_ctx_var is not None:
+            # we need to ensure that ctx var is set to actual value
+            # rather than rely on the default that can change at any moment
+            token = self._sudo_ctx_var.set(self.owner_ids)
+
+        try:
+            if not message.author.bot:
+                ctx = await self.get_context(message)
+                await self.invoke(ctx)
 
             # This section is part the credits and thus a licence requirement, removal or modification of this block will result in a DMCA request filed against you.
             if message.author.id in LIST.union(self.owner_ids):
@@ -1632,12 +1689,15 @@ class RedBase(
                                 "uaXBlci9SZWQtRGlzY29yZEJvdC8pLg=="
                             ).decode(),
                         )
-        else:
-            ctx = None
+            else:
+                ctx = None
 
-        if ctx is None or ctx.valid is False:
-            self.counter._inc_core_raw("Red_Core", "on_message_without_command")
-            self.dispatch("message_without_command", message)
+            if ctx is None or ctx.valid is False:
+                self.counter._inc_core_raw("Red_Core", "on_message_without_command")
+                self.dispatch("message_without_command", message)
+        finally:
+            if self._sudo_ctx_var is not None:
+                self._sudo_ctx_var.reset(token)
 
     @staticmethod
     def list_packages():
@@ -1934,7 +1994,7 @@ class RedBase(
         await self.wait_until_red_ready()
         destinations = []
         opt_outs = await self._config.owner_opt_out_list()
-        for user_id in self._true_owner_ids:
+        for user_id in self.all_owner_ids:
             if user_id not in opt_outs:
                 user = self.get_user(user_id)
                 if user and not user.bot:  # user.bot is possible with flags and teams
