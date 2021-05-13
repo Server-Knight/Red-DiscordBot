@@ -1169,7 +1169,7 @@ class _ForgetMeSpecialCommand(_RuleDropper, Command):
 
 
 # This is intentionally left out of `__all__` as it is not intended for general use
-class _IsTrueBotOwner(_AlwaysAvailableMixin, _RuleDropper, Command):
+class _IsTrueBotOwner(_RuleDropper, Command):
     """
     These commands do not respect most forms of checks, and
     should only be used with that in mind.
@@ -1179,9 +1179,9 @@ class _IsTrueBotOwner(_AlwaysAvailableMixin, _RuleDropper, Command):
 
     async def can_run(self, ctx, *args, **kwargs) -> bool:
         return (
-            ctx.bot._sudo_enabled is True
+            ctx.bot._sudo_ctx_var is not None
             and not ctx.author.bot
-            and ctx.author.id in ctx.bot._true_owner_ids
+            and ctx.author.id in ctx.bot.all_owner_ids
         )
 
     can_see = can_run
