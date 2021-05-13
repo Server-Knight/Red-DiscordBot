@@ -387,21 +387,6 @@ def _is_unsafe_on_strict_config(data: Any) -> bool:
             return True
 
 
-def is_sudo_enabled():
-    """Deny the command if sudo mechanic is not enabled."""
-
-    async def predicate(ctx):
-        return ctx.bot._sudo_enabled
-
-    return check(predicate)
-
-
-async def timed_unsudo(user_id: int, bot: Red):
-    await asyncio.sleep(delay=await bot._config.sudotime())
-    bot.owner_ids.discard(user_id)
-    bot._owner_sudo_tasks.pop(user_id, None)
-
-
 @final
 class ProxyCounter:
     __slots__ = ("__counters",)
