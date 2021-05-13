@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 main_log = logging.getLogger("red")
 
 __all__ = (
-    "timed_unsudo",
+    "timed_unsu",
     "safe_delete",
     "fuzzy_command_search",
     "format_fuzzy_results",
@@ -66,6 +66,7 @@ __all__ = (
     "fetch_last_fork_update",
     "deprecated_removed",
     "async_tqdm",
+    "is_sudo_enabled",
 )
 
 _T = TypeVar("_T")
@@ -725,3 +726,18 @@ def async_tqdm(
         asyncio.create_task(_progress_bar_refresher())
 
     return progress_bar
+
+
+def is_sudo_enabled():
+    """Deny the command if sudo mechanic is not enabled."""
+
+    async def predicate(ctx):
+        return ctx.bot._sudo_ctx_var is not None
+
+    return check(predicate)
+
+
+async def timed_unsu(user_id: int, bot: Red):
+    await asyncio.sleep(delay=await bot._config.sudotime())
+    bot._elevated_owner_ids -= {user_id}
+    bot._owner_sudo_tasks.pop(user_id, None)
