@@ -3623,7 +3623,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             await ctx.send(_("Users have been added to the allowlist."))
         else:
             await ctx.send(_("User has been added to the allowlist."))
-        await ctx.send(_("Users added to allowlist."))
 
     @allowlist.command(name="list")
     async def allowlist_list(self, ctx: commands.Context):
@@ -3666,12 +3665,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             - `<users...>` - The user or users to remove from the allowlist.
         """
         uids = {getattr(user, "id", user) for user in users}
-<<<<<<< HEAD
-        await self.bot.remove_from_allowlist(uids, None)
-=======
         await self.bot.remove_from_allowlist_raw(uids, None)
-
->>>>>>> 4912fb74 (Fix crash on localallowlist remove <user/role> reported by fixator)
         if len(uids) > 1:
             await ctx.send(_("Users have been removed from the allowlist."))
         else:
@@ -3768,7 +3762,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         """
         uids = {getattr(user, "id", user) for user in users}
         await self.bot.remove_from_blocklist_raw(uids, None)
-        await self.bot._whiteblacklist_cache.remove_from_blacklist(None, uids)
         if len(uids) > 1:
             await ctx.send(_("Users have been removed from the blocklist."))
         else:
@@ -3877,7 +3870,6 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         **Arguments:**
             - `<users_or_roles...>` - The users or roles to remove from the local allowlist.
         """
-        names = [getattr(u_or_r, "name", u_or_r) for u_or_r in users_or_roles]
         uids = {getattr(u_or_r, "id", u_or_r) for u_or_r in users_or_roles}
         if not (ctx.guild.owner == ctx.author or await self.bot.is_owner(ctx.author)):
             current_whitelist = await self.bot._whiteblacklist_cache.get_whitelist(ctx.guild)
