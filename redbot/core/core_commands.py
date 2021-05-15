@@ -26,6 +26,9 @@ from typing import TYPE_CHECKING, Union, Tuple, List, Optional, Iterable, Sequen
 import aiohttp
 import discord
 from babel import Locale as BabelLocale, UnknownLocaleError
+
+from redbot import json
+from redbot.core import modlog, bank, Config
 from redbot.core.data_manager import storage_type
 from redbot.core.utils.chat_formatting import box, pagify
 
@@ -37,6 +40,7 @@ from . import (
     errors,
     i18n,
 )
+from .commands import UserInputOptional
 from .utils import AsyncIter
 from .utils._internal_utils import fetch_latest_red_version_info, is_sudo_enabled, timed_unsu
 from .utils.predicates import MessagePredicate
@@ -2325,7 +2329,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
             if url.startswith("<") and url.endswith(">"):
                 url = url[1:-1]
 
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(json_serialize=json.dumps) as session:
                 try:
                     async with session.get(url) as r:
                         data = await r.read()
@@ -4886,7 +4890,7 @@ class Core(commands.commands._RuleDropper, commands.Cog, CoreLogic):
         aliases=["licenceinfo"],
         i18n=_,
     )
-    async def license_info_command(self, ctx):
+    async def license_info_command(self, ctx: commands.Context):
         """
         Get info about Red's licenses.
         """
