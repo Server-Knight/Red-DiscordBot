@@ -325,9 +325,9 @@ class Dev(commands.Cog):
         else:
             await ctx.send(_("The REPL session in this channel is now paused."))
 
-    @commands.command()
+    @commands.command(aliases=["cmock"])
     @checks.is_owner()
-    async def mock(self, ctx, user: discord.Member, *, command):
+    async def commandmock(self, ctx, user: discord.Member, *, command):
         """Mock another user invoking a command.
 
         The prefix must not be entered.

@@ -5,22 +5,29 @@
 import asyncio
 import contextlib
 import functools
-from typing import Iterable, List, Union
+import logging
+from typing import Iterable, List, Optional, Union, Dict
 import discord
 
 from .. import commands
 from .predicates import ReactionPredicate
+from ..i18n import Translator
+from ._dpy_menus_utils import dpymenu
 
 _ReactableEmoji = Union[str, discord.Emoji]
+
+_ = Translator("Menus", __file__)
+
+log = logging.getLogger("red.menus")
 
 
 async def menu(
     ctx: commands.Context,
     pages: Union[List[str], List[discord.Embed]],
-    controls: dict,
+    controls: Dict,
     message: discord.Message = None,
     page: int = 0,
-    timeout: float = 30.0,
+    timeout: float = 60.0,
 ):
     """
     An emoji-based menu
@@ -56,6 +63,14 @@ async def menu(
     RuntimeError
         If either of the notes above are violated
     """
+    if (
+        not message
+        and controls == DEFAULT_CONTROLS
+        or (len(controls) == 1 and list(controls.values())[0] == close_menu)
+    ):
+        await dpymenu(ctx, pages, controls, message, page, timeout)
+        return
+
     if not isinstance(pages[0], (discord.Embed, str)):
         raise RuntimeError("Pages must be of type discord.Embed or str")
     if not all(isinstance(x, discord.Embed) for x in pages) and not all(
