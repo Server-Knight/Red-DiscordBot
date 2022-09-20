@@ -5,7 +5,7 @@ import sys
 import codecs
 import logging
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
 import discord
@@ -31,6 +31,7 @@ from .utils._internal_utils import (
     expected_version,
     fetch_latest_red_version_info,
     send_to_owners_with_prefix_replaced,
+    get_converter,
 )
 from .utils.chat_formatting import inline, bordered, format_perms_list, humanize_timedelta
 
@@ -221,11 +222,6 @@ def init_events(bot, cli_flags):
         if rich_outdated_message:
             rich_console.print(rich_outdated_message)
 
-        if not bot.all_owner_ids:
-            # we could possibly exit here in future
-            log.warning("Bot doesn't have any owner set!")
-
-        bot._color = discord.Colour(await bot._config.color())
         bot._red_ready.set()
         if outdated_red_message:
             await send_to_owners_with_prefix_replaced(bot, outdated_red_message)
@@ -275,7 +271,6 @@ def init_events(bot, cli_flags):
 
     @bot.event
     async def on_command_error(ctx, error, unhandled_by_cog=False):
-
         if not unhandled_by_cog:
             if hasattr(ctx.command, "on_error"):
                 return
@@ -297,7 +292,16 @@ def init_events(bot, cli_flags):
             await ctx.send(msg)
             if error.send_cmd_help:
                 await ctx.send_help()
-        elif isinstance(error, commands.ConversionFailure):
+        elif isinstance(error, commands.BadArgument):
+            if isinstance(error.__cause__, ValueError):
+                converter = get_converter(ctx.current_parameter)
+                argument = ctx.current_argument
+                if converter is int:
+                    await ctx.send(_('"{argument}" is not an integer.').format(argument=argument))
+                    return
+                if converter is float:
+                    await ctx.send(_('"{argument}" is not a number.').format(argument=argument))
+                    return
             if error.args:
                 await ctx.send(error.args[0])
             else:
@@ -424,7 +428,7 @@ def init_events(bot, cli_flags):
             not bot._checked_time_accuracy
             or (discord_now - timedelta(minutes=60)) > bot._checked_time_accuracy
         ):
-            system_now = datetime.utcnow()
+            system_now = datetime.now(timezone.utc)
             diff = abs((discord_now - system_now).total_seconds())
             if diff > 60:
                 log.warning(
