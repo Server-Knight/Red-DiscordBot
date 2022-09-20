@@ -55,7 +55,7 @@ from .settings_caches import (
     I18nManager,
 )
 from .rpc import RPCMixin
-from .utils import common_filters, AsyncIter
+from .utils import common_filters, AsyncIter, can_user_send_messages_in
 from .utils._internal_utils import (
     ProxyCounter,
     deprecated_removed,
