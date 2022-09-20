@@ -2,7 +2,6 @@ import asyncio
 import logging
 from typing import Iterable, Optional, Union, Any, Dict
 import discord
-from discord.embeds import _EmptyEmbed
 
 from redbot.vendored.discord.ext import menus as _dpy_menus
 
@@ -552,7 +551,7 @@ class SimpleSource(_dpy_menus.ListPageSource):
         self, menu: SimpleHybridMenu, page: Union[str, discord.Embed]
     ) -> Union[discord.Embed, str]:
         """Sends thee specified page to the menu."""
-        if isinstance(page, discord.Embed) and isinstance(page.colour, _EmptyEmbed):
+        if isinstance(page, discord.Embed) and isinstance(page.colour, None):
             page.colour = await menu.ctx.embed_colour()
         return page
 
