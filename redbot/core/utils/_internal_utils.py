@@ -38,9 +38,11 @@ import aiohttp
 import discord
 import pkg_resources
 from discord.ext.commands import Cog, check
+from discord.ext.commands.converter import get_converter  # DEP-WARN
 from fuzzywuzzy import fuzz, process
 from rich.progress import ProgressColumn
 from rich.progress_bar import ProgressBar
+from red_commons.logging import VERBOSE, TRACE
 
 from redbot import VersionInfo, json
 from redbot.core import data_manager
@@ -67,6 +69,8 @@ __all__ = (
     "fetch_last_fork_update",
     "deprecated_removed",
     "RichIndefiniteBarColumn",
+    "cli_level_to_log_level",
+    "get_converter",
     "is_sudo_enabled",
 )
 
@@ -663,3 +667,15 @@ async def timed_unsu(user_id: int, bot: Red):
     await asyncio.sleep(delay=await bot._config.sudotime())
     bot._elevated_owner_ids -= {user_id}
     bot._owner_sudo_tasks.pop(user_id, None)
+
+
+def cli_level_to_log_level(level: int) -> int:
+    if level == 0:
+        log_level = logging.INFO
+    elif level == 1:
+        log_level = logging.DEBUG
+    elif level == 2:
+        log_level = VERBOSE
+    else:
+        log_level = TRACE
+    return log_level

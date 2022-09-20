@@ -5,8 +5,10 @@
 import asyncio
 import contextlib
 import functools
+from types import MappingProxyType
 import logging
-from typing import Iterable, List, Optional, Union, Dict
+from typing import Callable, Iterable, List, Mapping, TypeVar, Optional, Union, Dict
+
 import discord
 
 from .. import commands
@@ -14,7 +16,10 @@ from .predicates import ReactionPredicate
 from ..i18n import Translator
 from ._dpy_menus_utils import dpymenu
 
+_T = TypeVar("_T")
+_PageList = TypeVar("_PageList", List[str], List[discord.Embed])
 _ReactableEmoji = Union[str, discord.Emoji]
+_ControlCallable = Callable[[commands.Context, _PageList, discord.Message, int, float, str], _T]
 
 _ = Translator("Menus", __file__)
 
@@ -47,9 +52,12 @@ async def menu(
         The command context
     pages: `list` of `str` or `discord.Embed`
         The pages of the menu.
-    controls: dict
+    controls: Optional[Mapping[str, Callable]]
         A mapping of emoji to the function which handles the action for the
-        emoji.
+        emoji. The signature of the function should be the same as of this function
+        and should additionally accept an ``emoji`` parameter of type `str`.
+        If not passed, `DEFAULT_CONTROLS` is used *or*
+        only a close menu control is shown when ``pages`` is of length 1.
     message: discord.Message
         The message representing the menu. Usually :code:`None` when first opening
         the menu
@@ -77,6 +85,11 @@ async def menu(
         isinstance(x, str) for x in pages
     ):
         raise RuntimeError("All pages must be of the same type")
+    if controls is None:
+        if len(pages) == 1:
+            controls = {"\N{CROSS MARK}": close_menu}
+        else:
+            controls = DEFAULT_CONTROLS
     for key, value in controls.items():
         maybe_coro = value
         if isinstance(value, functools.partial):
@@ -105,8 +118,8 @@ async def menu(
     try:
         predicates = ReactionPredicate.with_emojis(tuple(controls.keys()), message, ctx.author)
         tasks = [
-            asyncio.ensure_future(ctx.bot.wait_for("reaction_add", check=predicates)),
-            asyncio.ensure_future(ctx.bot.wait_for("reaction_remove", check=predicates)),
+            asyncio.create_task(ctx.bot.wait_for("reaction_add", check=predicates)),
+            asyncio.create_task(ctx.bot.wait_for("reaction_remove", check=predicates)),
         ]
         done, pending = await asyncio.wait(
             tasks, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
@@ -121,7 +134,10 @@ async def menu(
         if not ctx.me:
             return
         try:
-            if message.channel.permissions_for(ctx.me).manage_messages:
+            if (
+                isinstance(message.channel, discord.PartialMessageable)
+                or message.channel.permissions_for(ctx.me).manage_messages
+            ):
                 await message.clear_reactions()
             else:
                 raise RuntimeError
@@ -144,13 +160,17 @@ async def menu(
 async def next_page(
     ctx: commands.Context,
     pages: list,
-    controls: dict,
+    controls: Mapping[str, _ControlCallable],
     message: discord.Message,
     page: int,
     timeout: float,
     emoji: str,
-):
-    if page == len(pages) - 1:
+) -> _T:
+    """
+    Function for showing next page which is suitable
+    for use in ``controls`` mapping that is passed to `menu()`.
+    """
+    if page >= len(pages) - 1:
         page = 0  # Loop around to the first item
     else:
         page = page + 1
@@ -160,13 +180,17 @@ async def next_page(
 async def prev_page(
     ctx: commands.Context,
     pages: list,
-    controls: dict,
+    controls: Mapping[str, _ControlCallable],
     message: discord.Message,
     page: int,
     timeout: float,
     emoji: str,
-):
-    if page == 0:
+) -> _T:
+    """
+    Function for showing previous page which is suitable
+    for use in ``controls`` mapping that is passed to `menu()`.
+    """
+    if page <= 0:
         page = len(pages) - 1  # Loop around to the last item
     else:
         page = page - 1
@@ -176,12 +200,16 @@ async def prev_page(
 async def close_menu(
     ctx: commands.Context,
     pages: list,
-    controls: dict,
+    controls: Mapping[str, _ControlCallable],
     message: discord.Message,
     page: int,
     timeout: float,
     emoji: str,
-):
+) -> None:
+    """
+    Function for closing (deleting) menu which is suitable
+    for use in ``controls`` mapping that is passed to `menu()`.
+    """
     with contextlib.suppress(discord.NotFound):
         await message.delete()
 
@@ -197,7 +225,7 @@ def start_adding_reactions(
 
     This is particularly useful if you wish to start waiting for a
     reaction whilst the reactions are still being added - in fact,
-    this is exactly what `menu` uses to do that.
+    this is exactly what `menu()` uses to do that.
 
     Parameters
     ----------
@@ -222,8 +250,12 @@ def start_adding_reactions(
     return asyncio.create_task(task())
 
 
-DEFAULT_CONTROLS = {
-    "\N{LEFTWARDS BLACK ARROW}\N{VARIATION SELECTOR-16}": prev_page,
-    "\N{CROSS MARK}": close_menu,
-    "\N{BLACK RIGHTWARDS ARROW}\N{VARIATION SELECTOR-16}": next_page,
-}
+#: Default controls for `menu()` that contain controls for
+#: previous page, closing menu, and next page.
+DEFAULT_CONTROLS: Mapping[str, _ControlCallable] = MappingProxyType(
+    {
+        "\N{LEFTWARDS BLACK ARROW}\N{VARIATION SELECTOR-16}": prev_page,
+        "\N{CROSS MARK}": close_menu,
+        "\N{BLACK RIGHTWARDS ARROW}\N{VARIATION SELECTOR-16}": next_page,
+    }
+)
